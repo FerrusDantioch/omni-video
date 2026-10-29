@@ -53,6 +53,39 @@ const Chronologie = {
     new ResizeObserver(() => { if (Projets.courant) this.dessiner(); }).observe(defilement);
 
     Lecteur.surChangement(() => this.majPosition());
+
+    // « Son du clip » : un glissement du curseur = une seule étape « Annuler »
+    const curseur = $('#volume-clip');
+    curseur.addEventListener('input', () => {
+      const c = this._cible();
+      if (!c) return;
+      if (!this._volumeEnCours) { this._memoriser(); this._volumeEnCours = true; }
+      c.seg.clip.volume = Number(curseur.value) / 100;
+      Lecteur.appliquerVolume();
+      this._majVolume(c.seg);
+      Projets.modifie();
+    });
+    curseur.addEventListener('change', () => { this._volumeEnCours = false; });
+  },
+
+  /* « Couper le son » du clip, ou le remettre (à 100 %) */
+  basculerSonClip() {
+    const c = this._cible();
+    if (!c || c.seg.media.type !== 'video') return;
+    this._memoriser();
+    c.seg.clip.volume = c.seg.clip.volume > 0 ? 0 : 1;
+    Lecteur.appliquerVolume();
+    this._majVolume(c.seg);
+    Projets.modifie();
+  },
+
+  _majVolume(seg) {
+    const volume = Math.round(seg.clip.volume * 100);
+    $('#volume-clip').value = volume;
+    ecrireTexte($('#volume-clip-valeur'), volume === 0 ? 'coupé' : volume + ' %');
+    const bouton = $('#bouton-muet-clip');
+    $('use', bouton).setAttribute('href', volume === 0 ? '#i-son' : '#i-muet');
+    ecrireTexte($('span', bouton), volume === 0 ? 'Remettre le son' : 'Couper le son');
   },
 
   /* ---------- Ouvrir un projet ---------- */
@@ -116,6 +149,7 @@ const Chronologie = {
     }).join('');
 
     this.dessinerCalques();
+    this.dessinerPistes();
     $('#chronologie-vide').hidden = Lecteur.segments.length > 0;
     this._indexAffiche = -2;
     this._placerBande(Lecteur.t);
@@ -128,6 +162,9 @@ const Chronologie = {
   dessinerCalques() {
     const projet = Projets.courant;
     if (!projet) return;
+    // Pas de calque : la ligne ne prend pas de place ; une seule rangée si
+    // aucun calque n'en chevauche un autre
+    $('#chrono-piste').style.setProperty('--h-calques', projet.calques.length ? (this._chevauchement(projet.calques) ? '40px' : '21px') : '0px');
     const finRangee = [-Infinity, -Infinity];
     const calques = projet.calques.slice().sort((a, b) => a.debut - b.debut);
     $('#chrono-calques').innerHTML = calques.map((c) => {
@@ -139,6 +176,37 @@ const Chronologie = {
         'style="left:' + (this._marge + c.debut * this.pps).toFixed(1) + 'px;width:' + Math.max(18, c.duree * this.pps).toFixed(1) + 'px;top:' + (rangee * 19) + 'px" ' +
         'aria-label="Modifier : ' + proteger(libelle) + '">' +
         '<span>' + (c.type === 'texte' ? 'T ' : '▣ ') + proteger(libelle) + '</span></button>';
+    }).join('');
+  },
+
+  /* Deux calques se chevauchent-ils dans le temps ? */
+  _chevauchement(calques) {
+    const tries = calques.slice().sort((a, b) => a.debut - b.debut);
+    let fin = -Infinity;
+    for (const c of tries) {
+      if (c.debut < fin) return true;
+      fin = Math.max(fin, c.debut + c.duree);
+    }
+    return false;
+  },
+
+  /* La musique de fond et les voix off, en barres sous les clips
+     (musique sur la première rangée, voix sur la seconde) */
+  dessinerPistes() {
+    const projet = Projets.courant;
+    if (!projet) return;
+    const musique = projet.pistes.some((p) => p.type === 'musique');
+    const voix = projet.pistes.some((p) => p.type === 'voix');
+    $('#chrono-piste').style.setProperty('--h-pistes', musique && voix ? '40px' : (musique || voix ? '21px' : '0px'));
+    const rangeeVoix = musique ? 19 : 0;
+    $('#chrono-pistes').innerHTML = projet.pistes.map((p) => {
+      const media = projet.medias.find((m) => m.id === p.mediaId);
+      const nom = media ? media.nom : 'Son';
+      const duree = PistesAudio.duree(p);
+      return '<button type="button" class="chrono-piste-audio chrono-' + p.type + '" data-action="onglet" data-onglet="son" ' +
+        'style="left:' + (this._marge + p.debut * this.pps).toFixed(1) + 'px;width:' + Math.max(18, duree * this.pps).toFixed(1) + 'px;top:' + (p.type === 'voix' ? rangeeVoix : 0) + 'px" ' +
+        'aria-label="Régler le son : ' + proteger(nom) + '"><span>' + (p.type === 'musique' ? '♪ ' : '') + proteger(nom) +
+        ' · ' + Math.round(p.volume * 100) + ' %</span></button>';
     }).join('');
   },
 
@@ -222,6 +290,14 @@ const Chronologie = {
     actif('supprimer-clip', true);
     const image = seg.media.type === 'image';
     $$('.outil-image', zone).forEach((b) => { b.hidden = !image; });
+    // Le son du clip : seulement pour une vidéo qui a du son
+    const avecSon = seg.media.type === 'video' && seg.media.aSon;
+    $('#outil-volume').hidden = !avecSon;
+    if (avecSon) {
+      $('#volume-clip').disabled = Lecteur.enLecture;
+      $('#bouton-muet-clip').disabled = Lecteur.enLecture;
+      if (!this._volumeEnCours) this._majVolume(seg);
+    }
     if (image) $('[data-action="duree-image"][data-secondes="-1"]', zone).disabled = seg.fin - seg.debut <= 1.05 || Lecteur.enLecture;
 
     ecrireTexte($('#outils-titre'), 'Clip ' + (i + 1) + ' sur ' + n + ' · ' + seg.media.nom + ' · ' +
@@ -244,7 +320,8 @@ const Chronologie = {
   },
 
   _photo() {
-    return JSON.stringify({ clips: Projets.courant.clips, calques: Projets.courant.calques, t: Lecteur.t });
+    const p = Projets.courant;
+    return JSON.stringify({ clips: p.clips, calques: p.calques, pistes: p.pistes, t: Lecteur.t });
   },
 
   _restaurer(photo) {
@@ -253,7 +330,10 @@ const Chronologie = {
     // Un clip ou une image dont le fichier a été retiré du projet entre-temps est oublié
     projet.clips = donnees.clips.map((c) => nettoyerClip(c, projet.medias)).filter(Boolean);
     projet.calques = (donnees.calques || []).map((c) => nettoyerCalque(c, projet.medias)).filter(Boolean);
+    projet.pistes = (donnees.pistes || []).map((x) => nettoyerPiste(x, projet.medias)).filter(Boolean);
     this._apresModification(donnees.t);
+    PistesAudio.afficherListes();
+    PistesAudio.synchroniser();
     // L'éditeur ouvert suit (ou se ferme si son calque n'existe plus)
     if (Incrustations.edite) {
       if (Incrustations.calque(Incrustations.edite)) { Incrustations.majEditeur(); Incrustations._dejaMemorise = false; }

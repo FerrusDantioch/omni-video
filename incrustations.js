@@ -44,6 +44,7 @@ const Onglets = {
     $$('.onglet').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.onglet === nom)));
     $$('.onglet-contenu').forEach((zone) => { zone.hidden = zone.dataset.onglet !== nom; });
     if (nom === 'textes' || nom === 'images') Incrustations.afficherListes();
+    if (nom === 'son') PistesAudio.afficherListes();
   }
 };
 

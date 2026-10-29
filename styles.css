@@ -608,9 +608,13 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
   border-radius: 8px;
   background: var(--fond);
 }
+/* Les lignes « textes et images » et « sons » n'apparaissent que si elles
+   contiennent quelque chose (chronologie.js règle --h-calques et --h-pistes) */
 .chrono-piste {
+  --h-calques: 0px;
+  --h-pistes: 0px;
   position: relative;
-  height: 150px;
+  height: calc(26px + var(--h-calques) + 80px + var(--h-pistes) + 4px);
   /* un appui long n'ouvre pas le menu « copier / sélectionner » */
   user-select: none;
   -webkit-user-select: none;
@@ -627,7 +631,7 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
   white-space: nowrap;
 }
 /* La ligne des textes et images incrustées (deux rangées de 17 px) */
-.chrono-calques { position: absolute; left: 0; right: 0; top: 26px; height: 36px; }
+.chrono-calques { position: absolute; left: 0; right: 0; top: 26px; height: var(--h-calques); }
 .chrono-calque {
   position: absolute;
   height: 17px;
@@ -646,7 +650,28 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
 }
 .chrono-calque-image { background: color-mix(in srgb, var(--bleu) 45%, var(--fond)); border-color: var(--bleu); }
 .chrono-calque span { pointer-events: none; }
-.chrono-clips { position: absolute; left: 0; right: 0; top: 66px; height: 76px; }
+.chrono-clips { position: absolute; left: 0; right: 0; top: calc(26px + var(--h-calques)); height: 76px; }
+
+/* La ligne de la musique et des voix off, sous les clips */
+.chrono-pistes { position: absolute; left: 0; right: 0; top: calc(26px + var(--h-calques) + 80px); height: var(--h-pistes); }
+.chrono-piste-audio {
+  position: absolute;
+  height: 17px;
+  padding: 0 6px;
+  border: 1px solid var(--or);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--or) 40%, var(--fond));
+  color: var(--texte);
+  font: 600 0.72rem/15px var(--f-titre);
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  touch-action: pan-x;
+}
+.chrono-voix { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 38%, var(--fond)); }
+.chrono-piste-audio span { pointer-events: none; }
 .chrono-clip {
   position: absolute;
   top: 0;
@@ -692,7 +717,7 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
 }
 .chrono-vide {
   position: absolute;
-  inset: 66px 16px auto;
+  inset: 28px 16px auto;
   padding: 10px;
   text-align: center;
   color: var(--discret);
@@ -706,6 +731,10 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
 .outils-boutons { display: flex; flex-wrap: wrap; gap: 8px; }
 .outils-boutons .bouton { flex: 1 1 150px; min-height: 56px; padding: 6px 10px; font-size: 0.95rem; }
 .outils-boutons .outil-image { flex: 0 1 90px; font-family: var(--f-chiffres); }
+/* Le son du clip : un curseur et un bouton « Couper le son » */
+.outil-volume { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.outil-volume .champ-curseur { grid-template-columns: auto 4.5em minmax(0, 1fr); align-items: center; gap: 8px; }
+.outil-volume .bouton { min-height: 52px; font-size: 0.95rem; }
 
 
 /* La toile des textes et images, posée sur la vidéo de l'aperçu.
@@ -715,7 +744,7 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
 
 /* ---------- 9 ter. Onglets du panneau de droite ---------- */
 
-.onglets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.onglets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .onglet {
   display: flex;
   flex-direction: column;
@@ -855,6 +884,54 @@ textarea:focus { border-color: var(--accent); outline: none; }
 .ed-places .bouton { min-height: 52px; font-size: 1.3rem; }
 .interrupteur { display: flex; align-items: center; gap: 12px; min-height: 48px; cursor: pointer; }
 .interrupteur input { width: 26px; height: 26px; accent-color: var(--accent); }
+
+
+/* Onglet « Son » */
+.bloc-son {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: var(--surface);
+  border: var(--carte-bord);
+  border-radius: 12px;
+}
+.choix-musique-liste { display: grid; gap: 8px; }
+.choix-musique { justify-content: flex-start; text-align: left; overflow-wrap: anywhere; }
+.choix-musique .mono { margin-left: auto; color: var(--discret); }
+.carte-piste {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--fond);
+  border: var(--carte-bord);
+  border-left: 4px solid var(--or);
+  border-radius: 12px;
+}
+.carte-piste-voix { border-left-color: var(--danger); }
+.carte-piste .rangee-2 .bouton { min-height: 52px; font-size: 0.95rem; padding: 6px 8px; }
+
+/* Enregistrement de la voix : un bouton rouge doux et un compteur, sans
+   clignotement ; le reste du montage est grisé pour éviter les fausses
+   manœuvres. */
+#bouton-enregistrer.en-enregistrement { background: var(--danger); border-color: var(--danger); color: var(--accent-texte); }
+.etat-enregistrement {
+  padding: 10px 14px;
+  border: 2px solid var(--danger);
+  border-radius: 12px;
+  background: var(--danger-fond);
+  color: var(--danger-texte);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.enregistrement-voix .chronologie,
+.enregistrement-voix #commandes-montage,
+.enregistrement-voix .onglets,
+.enregistrement-voix .barre,
+.enregistrement-voix .bloc-son:first-child,
+.enregistrement-voix #liste-voix {
+  opacity: 0.45;
+  pointer-events: none;
+}
 
 
 /* ---------- 9 quater. Fenêtre « Voir un fichier » ---------- */

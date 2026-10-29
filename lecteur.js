@@ -29,6 +29,7 @@ const MARGE_FIN_CLIP = 0.03;
 const Lecteur = {
   t: 0,                 // position dans le montage, en secondes
   enLecture: false,
+  muet: false,          // vrai pendant l'enregistrement d'une voix off (le micro ne doit pas entendre la vidéo)
   segments: [],         // les clips, avec leur place dans le montage
   elements: [],         // les deux lecteurs vidéo qui se relaient
   actif: 0,             // numéro (0 ou 1) du lecteur visible
@@ -127,6 +128,16 @@ const Lecteur = {
     this._prevenir();
   },
 
+  /* Applique tout de suite le volume du clip en cours (réglage changé,
+     ou « muet » activé / désactivé) */
+  appliquerVolume() {
+    const seg = this.segments[this.index];
+    if (!seg || !this._estVideo(seg)) return;
+    const el = this.elements[this.actif];
+    el.volume = seg.clip.volume;
+    el.muted = this.muet || seg.clip.volume === 0;
+  },
+
   basculer() {
     if (this.enLecture) this.pause();
     else this.lire();
@@ -160,7 +171,7 @@ const Lecteur = {
       if (Math.abs(el.currentTime - local) > 0.04 || el.dataset.clip !== seg.clip.id) el.currentTime = local;
       el.dataset.clip = seg.clip.id;
       el.volume = seg.clip.volume;
-      el.muted = seg.clip.volume === 0;
+      el.muted = this.muet || seg.clip.volume === 0;
       // On montre ce lecteur-là, et seulement lui
       el.classList.add('montre');
       this.elements[1 - this.actif].classList.remove('montre');
@@ -274,7 +285,7 @@ const Lecteur = {
       const el = this.elements[this.actif];
       el.dataset.clip = suivant.clip.id;
       el.volume = suivant.clip.volume;
-      el.muted = suivant.clip.volume === 0;
+      el.muted = this.muet || suivant.clip.volume === 0;
       this._preparerSuivant(i);
     } else {
       this.afficher(i, true);

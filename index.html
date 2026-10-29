@@ -30,6 +30,7 @@
 <script defer src="./rendu.js"></script>
 <script defer src="./chronologie.js"></script>
 <script defer src="./incrustations.js"></script>
+<script defer src="./audio.js"></script>
 <script defer src="./projets.js"></script>
 <script defer src="./app.js"></script>
 </head>
@@ -53,6 +54,10 @@
     <symbol id="i-tablette" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M11 18h2"/></g></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></g></symbol>
     <symbol id="i-format" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="7" width="13" height="9" rx="1.5"/><rect x="17" y="4" width="5" height="16" rx="1.5"/></g></symbol>
+    <symbol id="i-micro" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></g></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol>
+    <symbol id="i-muet" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l4 6M21 9l-4 6"/></g></symbol>
+    <symbol id="i-son" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 8a5 5 0 0 1 0 8M19.5 5.5a9 9 0 0 1 0 13"/></g></symbol>
     <symbol id="i-texte" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6V4h16v2M12 4v16M9 20h6"/></g></symbol>
     <symbol id="i-ciseaux" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/></g></symbol>
     <symbol id="i-enlever-avant" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v18"/><rect x="16" y="7" width="6" height="10" rx="1"/><path d="M3 8l7 8M10 8l-7 8"/></g></symbol>
@@ -181,6 +186,9 @@
         <button type="button" class="onglet" role="tab" data-action="onglet" data-onglet="images" aria-selected="false">
           <svg class="icone" aria-hidden="true"><use href="#i-image"/></svg>Images
         </button>
+        <button type="button" class="onglet" role="tab" data-action="onglet" data-onglet="son" aria-selected="false">
+          <svg class="icone" aria-hidden="true"><use href="#i-musique"/></svg>Son
+        </button>
       </div>
 
       <!-- Onglet « Mes fichiers » : vidéos, images, musiques -->
@@ -231,6 +239,45 @@
         <p class="vide" id="incrustations-vide">Aucune image incrustée. Une image incrustée s'affiche PAR-DESSUS
            la vidéo : un logo dans un coin, une photo, une flèche… Pour une image en plein écran entre deux
            vidéos, utilise plutôt « Ajouter à la vidéo » dans « Mes fichiers ».</p>
+      </div>
+
+      <!-- Onglet « Son » : musique de fond et voix off (voir audio.js) -->
+      <div class="onglet-contenu" data-onglet="son" role="tabpanel" hidden>
+        <section class="bloc-son">
+          <h3>Musique de fond</h3>
+          <button type="button" class="bouton bouton-principal grand" data-action="choisir-musique">
+            <svg class="icone" aria-hidden="true"><use href="#i-plus"/></svg>Ajouter une musique de fond
+          </button>
+          <div class="choix-incrustation" id="choix-musique" hidden>
+            <p>Touche la musique à mettre sous la vidéo :</p>
+            <div class="choix-musique-liste" id="choix-musique-liste"></div>
+            <div id="choix-musique-vide" hidden>
+              <p class="aide">Tu n'as pas encore de musique dans ce projet.</p>
+              <button type="button" class="bouton large" data-action="importer" data-type="audio">
+                <svg class="icone" aria-hidden="true"><use href="#i-musique"/></svg>Ajouter des musiques
+              </button>
+            </div>
+          </div>
+          <ul class="liste-calques" id="liste-musiques"></ul>
+          <p class="vide" id="musiques-vide">Pas de musique de fond. Elle se règle à 30 % du volume au départ,
+             pour qu'on entende bien les voix ; tu peux la monter ou la baisser.</p>
+        </section>
+
+        <section class="bloc-son">
+          <h3>Voix off</h3>
+          <p class="aide">Place la ligne violette, touche « Enregistrer » et parle : la vidéo défile pendant que tu parles.
+             Touche « Arrêter » quand tu as fini.</p>
+          <button type="button" class="bouton bouton-principal grand" data-action="enregistrer-voix" id="bouton-enregistrer">
+            <svg class="icone" aria-hidden="true"><use href="#i-micro"/></svg><span>Enregistrer ma voix à la ligne violette</span>
+          </button>
+          <p class="etat-enregistrement mono" id="etat-enregistrement" aria-live="polite" hidden></p>
+          <label class="interrupteur"><input type="checkbox" id="couper-son-enregistrement" checked>
+            Couper le son de la vidéo et de la musique pendant que j'enregistre (sinon le micro les entend)</label>
+          <ul class="liste-calques" id="liste-voix"></ul>
+          <p class="vide" id="voix-vide">Pas encore de voix off.</p>
+        </section>
+
+        <p class="aide">Le son de chaque clip vidéo se règle dans la chronologie : touche le clip, puis « Son du clip ».</p>
       </div>
 
       <!-- L'éditeur d'un texte ou d'une image incrustée (voir incrustations.js) -->
@@ -328,6 +375,8 @@
           <!-- Les textes et images incrustées, au-dessus des clips -->
           <div class="chrono-calques" id="chrono-calques"></div>
           <div class="chrono-clips" id="chrono-clips"></div>
+          <!-- La musique de fond et les voix off, sous les clips -->
+          <div class="chrono-pistes" id="chrono-pistes"></div>
         </div>
       </div>
       <div class="chrono-tete" aria-hidden="true"></div>
@@ -357,6 +406,15 @@
         <button type="button" class="bouton outil-image" data-action="duree-image" data-secondes="1" aria-label="Montrer l'image 1 seconde de plus">+1 s</button>
         <button type="button" class="bouton" data-action="supprimer-clip">
           <svg class="icone" aria-hidden="true"><use href="#i-poubelle"/></svg>Supprimer le clip
+        </button>
+      </div>
+      <!-- Le son du clip vidéo (pas pour une image) -->
+      <div class="outil-volume" id="outil-volume">
+        <label class="champ-curseur">Son du clip : <span class="mono" id="volume-clip-valeur">100 %</span>
+          <input type="range" id="volume-clip" min="0" max="100" step="5" value="100">
+        </label>
+        <button type="button" class="bouton" data-action="couper-son-clip" id="bouton-muet-clip">
+          <svg class="icone" aria-hidden="true"><use href="#i-muet"/></svg><span>Couper le son</span>
         </button>
       </div>
     </div>

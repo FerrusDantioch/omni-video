@@ -12,7 +12,7 @@ Vérifier ma tablette, À propos.
 ## Construction par étapes
 
 0 fondations ✅ · a import et lecture ✅ · b chronologie ✅ · c texte et images ✅ ·
-d audio · e transitions · f sous-titres · g export MP4 · h hors ligne et
+d audio ✅ · e transitions · f sous-titres · g export MP4 · h hors ligne et
 installation. Après chaque étape : expliquer comment tester sur la tablette.
 À la fin : ajouter Omni-Vidéo au portfolio (`omni-systeme/index.html` et son
 README), dans le groupe « Création de contenu ».
@@ -81,6 +81,23 @@ README), dans le groupe « Création de contenu ».
   4 %). Texte : `taille` en % du CÔTÉ LE PLUS COURT de l'image (même aspect
   en 16:9 et 9:16), réduit tout seul si un mot dépasse. Image : `largeur` en %
   de la largeur.
+- `projet.pistes` : `[{ id, type: 'musique'|'voix', mediaId, debut, duree,
+  jusquALaFin, volume }]`, `debut` en secondes du MONTAGE. `PistesAudio.duree()`
+  donne la vraie durée (`jusquALaFin` = jusqu'au bout du montage, musique
+  répétée si plus courte ; une voix ne se répète jamais). Fondus fixes
+  (`FONDUS_PISTE`) : musique 1 s / 2 s, voix 0,05 s. L'export devra utiliser
+  `PistesAudio.volumeA()` et `positionA()` pour sonner comme l'aperçu.
+- Les voix off sont des médias `type: 'audio', voix: true` (Blob WebM/Opus du
+  MediaRecorder, dans le tiroir `fichiers`), cachés de « Mes fichiers ». Une
+  voix qui n'est plus utilisée par aucune piste est effacée à la réouverture
+  du projet (pas avant, pour qu'« Annuler » puisse la faire revenir).
+- Enregistrement : la vidéo démarre d'abord (son coupé si la case est cochée),
+  le micro s'allume quand elle avance vraiment, et la voix est posée à
+  `Lecteur.t` au démarrage du micro (`onstart`). Écran gardé allumé (`Veille`
+  dans outils.js), arrêt automatique en fin de vidéo ou en arrière-plan.
+- Aperçu du son : un `<audio>` par piste, recalé s'il s'écarte de plus de
+  0,25 s ; volume du clip par `el.volume` (0 à 1) ; `Lecteur.muet` pendant
+  l'enregistrement.
 - ⚠️ `rendu.js` dessine les calques pour l'aperçu ET pour l'export : ne jamais
   dessiner un calque autrement à l'export, sinon l'aperçu mentirait.
 - ⚠️ `nettoyerProjet()` et `nettoyerMedia()` ne gardent **que** les champs

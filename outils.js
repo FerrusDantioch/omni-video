@@ -151,6 +151,36 @@ function desarmerBouton(bouton) {
 }
 
 
+/* ---------- Garder l'écran allumé ----------
+   Pendant un enregistrement (et plus tard pendant l'export), l'écran ne
+   doit pas s'éteindre tout seul : la tablette arrêterait tout. Si le
+   navigateur ne sait pas le faire, on n'insiste pas. */
+const Veille = {
+  _verrou: null,
+  _voulu: false,
+
+  async empecher() {
+    this._voulu = true;
+    try {
+      if ('wakeLock' in navigator && !this._verrou) {
+        this._verrou = await navigator.wakeLock.request('screen');
+        this._verrou.addEventListener('release', () => { this._verrou = null; });
+      }
+    } catch (e) { /* pas grave : l'écran suivra le réglage de la tablette */ }
+  },
+
+  permettre() {
+    this._voulu = false;
+    if (this._verrou) this._verrou.release().catch(() => {});
+    this._verrou = null;
+  }
+};
+// Quand on revient sur Omni-Vidéo, la tablette a lâché le verrou : on le reprend
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && Veille._voulu) Veille.empecher();
+});
+
+
 /* ---------- Petit message en bas de l'écran ----------
    Pour dire « C'est fait » ou expliquer un souci, sans fenêtre à fermer.
    Il disparaît tout seul (plus lentement si c'est un problème, pour

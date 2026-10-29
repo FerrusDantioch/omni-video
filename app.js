@@ -12,7 +12,7 @@
 
 /* Numéro de version affiché dans « À propos ». À changer à chaque
    nouvelle version publiée. */
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 
 /* ---------- 1. Navigation entre les écrans ----------
    Chaque écran est une <section class="vue" data-vue="…">.
@@ -144,7 +144,16 @@ const ACTIONS = {
     const c = Incrustations.calque(Incrustations.edite);
     if (c) Incrustations.changer('duree', c.duree + Number(b.dataset.secondes));
   },
-  'supprimer-calque':     (b) => Incrustations.supprimer(b)
+  'supprimer-calque':     (b) => Incrustations.supprimer(b),
+
+  // Son : musique de fond, voix off, son des clips
+  'choisir-musique':      () => PistesAudio.montrerChoixMusiques(),
+  'ajouter-musique':      (b) => PistesAudio.ajouterMusique(b.dataset.id),
+  'enregistrer-voix':     () => Enregistreur.basculer(),
+  'piste-debut':          (b) => PistesAudio.commencerALaLigne(b.dataset.id),
+  'piste-fin':            (b) => PistesAudio.finirALaLigne(b.dataset.id),
+  'supprimer-piste':      (b) => PistesAudio.supprimer(b.dataset.id, b),
+  'couper-son-clip':      () => Chronologie.basculerSonClip()
 };
 
 document.addEventListener('click', (evenement) => {
@@ -194,6 +203,7 @@ async function demarrer() {
   Lecteur.initialiser();
   Chronologie.initialiser();
   Incrustations.initialiser();
+  PistesAudio.initialiser();
   // Les polices sont chargées tout de suite (la toile ne les attend pas)
   Rendu.chargerPolices().then(() => Incrustations.redessiner(true));
 

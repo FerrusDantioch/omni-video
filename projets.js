@@ -32,7 +32,7 @@ const Projets = {
     this.liste.sort((a, b) => b.modifie - a.modifie);
     const ul = $('#liste-projets');
     ul.innerHTML = this.liste.map((p) => {
-      const nb = (type) => p.medias.filter((m) => m.type === type).length;
+      const nb = (type) => p.medias.filter((m) => m.type === type && !m.voix).length;
       const morceaux = [NOMS_FORMATS[p.format]];
       const v = nb('video'), i = nb('image'), a = nb('audio');
       if (v) morceaux.push(v + (v > 1 ? ' vidéos' : ' vidéo'));
@@ -40,6 +40,8 @@ const Projets = {
       if (a) morceaux.push(a + (a > 1 ? ' musiques' : ' musique'));
       const duree = p.clips.reduce((total, c) => total + (c.fin - c.debut), 0);
       if (duree > 0) morceaux.push('durée ' + dureeEnMots(duree));
+      const voix = p.pistes.filter((x) => x.type === 'voix').length;
+      if (voix) morceaux.push(voix + ' voix off');
       return '<li class="carte projet-carte">' +
         '<h3 class="projet-nom">' + proteger(p.nom) + '</h3>' +
         '<p class="projet-resume">' + proteger(morceaux.join(' · ')) + '<br>Modifié ' + proteger(dateEnMots(p.modifie)) + '</p>' +
@@ -85,6 +87,14 @@ const Projets = {
       this.afficherListe();
       return;
     }
+    // Ménage : une voix off qui n'est plus utilisée nulle part (supprimée lors
+    // d'une visite précédente) est effacée pour de bon, avec son fichier
+    const orphelines = projet.medias.filter((m) => m.voix && !projet.pistes.some((x) => x.mediaId === m.id));
+    if (orphelines.length) {
+      projet.medias = projet.medias.filter((m) => !orphelines.includes(m));
+      orphelines.forEach((m) => Base.supprimerFichier(m.id).catch(() => {}));
+      Base.enregistrerProjet(projet).catch(() => {});
+    }
     this.courant = projet;
     await Medias.chargerFichiersLegers(projet);
     allerA('projet');
@@ -96,9 +106,11 @@ const Projets = {
   fermer() {
     if (!this.courant) return;
     this.enregistrerMaintenant();
+    if (Enregistreur.enCours) Enregistreur.arreter();
     Visionneuse.fermer();
     Incrustations.fermerEditeur();
     Lecteur.vider();
+    PistesAudio.vider();
     this.courant = null;
     Rendu.oublierImages();
     Incrustations.redessiner(true);
@@ -212,7 +224,9 @@ const Projets = {
   afficherMedias() {
     const projet = this.courant;
     if (!projet) return;
-    const medias = projet.medias.slice().sort((a, b) => ORDRE_TYPES[a.type] - ORDRE_TYPES[b.type]);
+    // Les voix off ne sont pas des fichiers de la tablette : elles se
+    // trouvent dans l'onglet « Son »
+    const medias = projet.medias.filter((m) => !m.voix).sort((a, b) => ORDRE_TYPES[a.type] - ORDRE_TYPES[b.type]);
     $('#liste-medias').innerHTML = medias.map((m) => carteMedia(m, utilisations(projet, m.id))).join('');
     $('#medias-vide').hidden = medias.length > 0;
   },
@@ -270,6 +284,7 @@ const Projets = {
     }
     // Le choix des images à incruster était ouvert : il montre les nouvelles
     if (type === 'image' && !$('#choix-incrustation').hidden) Incrustations.montrerChoixImages(true);
+    if (type === 'audio' && !$('#choix-musique').hidden) PistesAudio.montrerChoixMusiques(true);
     // Demande à la tablette de ne pas effacer nos données (une fois suffit)
     Persistance.demander();
 
@@ -344,6 +359,9 @@ const Projets = {
       // Les clips et les incrustations de ce fichier quittent la vidéo
       projet.clips = projet.clips.filter((c) => c.mediaId !== id);
       projet.calques = projet.calques.filter((c) => c.mediaId !== id);
+      projet.pistes = projet.pistes.filter((x) => x.mediaId !== id);
+      PistesAudio.synchroniser();
+      PistesAudio.afficherListes();
       Rendu.oublierImages();
       if (Incrustations.edite && !Incrustations.calque(Incrustations.edite)) Incrustations.fermerEditeur();
       await Medias.retirer(projet, id);
@@ -360,7 +378,8 @@ const Projets = {
    images incrustées) ? */
 function utilisations(projet, mediaId) {
   return projet.clips.filter((c) => c.mediaId === mediaId).length +
-         projet.calques.filter((c) => c.mediaId === mediaId).length;
+         projet.calques.filter((c) => c.mediaId === mediaId).length +
+         projet.pistes.filter((x) => x.mediaId === mediaId).length;
 }
 
 
@@ -406,6 +425,10 @@ function carteMedia(m, utilise) {
         (m.type !== 'audio' && !m.probleme && disponible
           ? '<button type="button" class="bouton bouton-principal" data-action="ajouter-au-montage" data-id="' + id + '">' +
             '<svg class="icone" aria-hidden="true"><use href="#i-plus"/></svg>Ajouter à la vidéo</button>'
+          : '') +
+        (m.type === 'audio' && !m.probleme && disponible
+          ? '<button type="button" class="bouton bouton-principal" data-action="ajouter-musique" data-id="' + id + '">' +
+            '<svg class="icone" aria-hidden="true"><use href="#i-plus"/></svg>Mettre en musique de fond</button>'
           : '') +
         '<button type="button" class="bouton" data-action="voir-media" data-id="' + id + '">' +
           '<svg class="icone" aria-hidden="true"><use href="#i-lecture"/></svg>Voir</button>' +

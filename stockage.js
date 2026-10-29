@@ -155,6 +155,9 @@ function nettoyerProjet(brut) {
     clips,
     calques: Array.isArray(brut.calques)
       ? brut.calques.map((c) => nettoyerCalque(c, medias)).filter(Boolean)
+      : [],
+    pistes: Array.isArray(brut.pistes)
+      ? brut.pistes.map((p) => nettoyerPiste(p, medias)).filter(Boolean)
       : []
   };
 }
@@ -233,6 +236,35 @@ function nettoyerClip(brut, medias) {
   };
 }
 
+/* Une piste audio : une musique de fond ou une voix off, jouée en même
+   temps que la vidéo.
+   - debut : en secondes, dans la vidéo finale (la chronologie).
+   - duree : combien de temps elle joue. Si « jusquALaFin » est vrai, elle
+     joue jusqu'à la fin de la vidéo, quelle que soit sa longueur (une
+     musique trop courte recommence alors depuis le début).
+   - volume : 0 = muet, 1 = volume normal.
+   Une musique recommence toujours si elle est plus courte que sa place ;
+   une voix off, jamais. */
+const TYPES_PISTE = ['musique', 'voix'];
+const VOLUME_MUSIQUE_DEFAUT = 0.3;   // une musique de fond reste discrète
+
+function nettoyerPiste(brut, medias) {
+  if (!brut || typeof brut !== 'object' || typeof brut.id !== 'string') return null;
+  if (!TYPES_PISTE.includes(brut.type)) return null;
+  const media = medias.find((m) => m.id === brut.mediaId && m.type === 'audio');
+  if (!media) return null;
+  const nombre = (v, defaut, min, max) => borner(Number.isFinite(v) ? v : defaut, min, max);
+  return {
+    id: brut.id,
+    type: brut.type,
+    mediaId: media.id,
+    debut: nombre(brut.debut, 0, 0, DUREE_CALQUE_MAX),
+    duree: nombre(brut.duree, media.duree || 1, DUREE_CALQUE_MIN, DUREE_CALQUE_MAX),
+    jusquALaFin: !!brut.jusquALaFin,
+    volume: nombre(brut.volume, brut.type === 'musique' ? VOLUME_MUSIQUE_DEFAUT : 1, 0, 1)
+  };
+}
+
 /* Un fichier du projet (vidéo, image ou musique) */
 function nettoyerMedia(brut) {
   if (!brut || typeof brut !== 'object' || typeof brut.id !== 'string') return null;
@@ -249,7 +281,8 @@ function nettoyerMedia(brut) {
     hauteur: nombre(brut.hauteur, 0),
     aSon: !!brut.aSon,                         // la vidéo contient-elle du son ?
     miniature: typeof brut.miniature === 'string' && brut.miniature.startsWith('data:image/') ? brut.miniature : '',
-    probleme: typeof brut.probleme === 'string' ? brut.probleme : ''   // texte si le fichier est illisible
+    probleme: typeof brut.probleme === 'string' ? brut.probleme : '',  // texte si le fichier est illisible
+    voix: brut.type === 'audio' && !!brut.voix   // une voix off enregistrée au micro (pas dans « Mes fichiers »)
   };
 }
 

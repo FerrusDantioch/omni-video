@@ -22,7 +22,7 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
 | c. Texte et images | Textes (police, taille, couleur, style, position, durée, fondu), images incrustées ; déplacement au doigt dans l'aperçu | ✅ |
 | d. Audio | Musique de fond (fondus automatiques, répétée si trop courte), voix off enregistrée au micro pendant que la vidéo défile, volume de chaque musique, voix et clip | ✅ |
 | e. Transitions | Fondu au noir, fondu enchaîné, glissement (0,5 / 1 / 2 s), entre deux clips ou partout ; fondu au début et à la fin de la vidéo | ✅ |
-| f. Sous-titres | Saisie, import .srt / .vtt, incrustation | à venir |
+| f. Sous-titres | Saisie à la main, import .srt / .vtt (accents compris), apparence (taille, place, fond, couleur), décalage de tous les sous-titres, enregistrement en .srt ; incrustés dans l'image | ✅ |
 | g. Export MP4 | H.264 + AAC, 16:9 ou 9:16, 720p ou 1080p, progression, annulation | à venir |
 | h. Hors ligne | Service worker, installation sur l'écran d'accueil, export / import de projet | à venir |
 
@@ -50,6 +50,13 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
   à 30 % du volume, avec un fondu au début et à la fin. Pour la voix off, on
   place la ligne violette, on touche « Enregistrer » et on parle pendant que
   la vidéo défile. Le son de chaque clip se règle sous la chronologie.
+- **Les sous-titres** (onglet « Sous-titres ») : placez la ligne violette là
+  où quelqu'un parle, touchez « Ajouter un sous-titre » et écrivez ; « Ajouter
+  le sous-titre d'après » enchaîne le suivant. On peut aussi importer un
+  fichier .srt ou .vtt (celui que YouTube propose de télécharger, par
+  exemple). Les sous-titres sont incrustés dans l'image de la vidéo finale ;
+  « Enregistrer en fichier .srt » donne en plus un fichier à envoyer sur
+  YouTube, si vous préférez des sous-titres que le spectateur peut masquer.
 - **Le test de la tablette** (bouton « Vérifier ma tablette ») indique ce qui
   fonctionne : lecture des vidéos, fabrication du MP4, place disponible,
   mémoire, micro…
@@ -73,9 +80,10 @@ pouvoir les envoyer depuis un téléphone ou une tablette.
 | `transitions.js` | Le calcul du montage : place de chaque clip, transitions (le même pour l'aperçu et la vidéo finale) |
 | `lecteur.js` | L'aperçu du montage : joue les clips les uns après les autres, avec les transitions |
 | `chronologie.js` | La chronologie : la bande des clips, la ligne violette, les outils, Annuler / Rétablir |
-| `rendu.js` | Le dessin des textes et images incrustées (le même pour l'aperçu et pour la vidéo finale) ; polices et couleurs proposées |
-| `incrustations.js` | Les onglets, la liste et l'éditeur des textes et images incrustées, le déplacement au doigt |
+| `rendu.js` | Le dessin des textes, des images incrustées et des sous-titres (le même pour l'aperçu et pour la vidéo finale) ; polices et couleurs proposées |
+| `incrustations.js` | Les onglets du panneau, la liste et l'éditeur des textes et images incrustées, le déplacement au doigt |
 | `audio.js` | La musique de fond et les voix off (lecture avec l'aperçu, enregistrement au micro, onglet « Son ») |
+| `sous-titres.js` | Les sous-titres : lecture des fichiers .srt / .vtt, éditeur, liste, apparence, enregistrement en .srt |
 | `projets.js` | La liste des projets, la sauvegarde automatique, l'écran du projet |
 | `mediabunny.min.js` | La bibliothèque vidéo Mediabunny (ne pas modifier) |
 | `logo.svg` | Le logo : le dé à vingt faces de l'Omni-système |

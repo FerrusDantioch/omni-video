@@ -111,6 +111,28 @@ function proteger(texte) {
 }
 
 
+/* Donne un fichier fabriqué par l'application (il arrive dans
+   « Téléchargements » sur la tablette). */
+function telechargerFichier(blob, nom) {
+  const adresse = URL.createObjectURL(blob);
+  const lien = document.createElement('a');
+  lien.href = adresse;
+  lien.download = nom;
+  document.body.appendChild(lien);
+  lien.click();
+  lien.remove();
+  // L'adresse est libérée un peu plus tard, une fois le fichier enregistré
+  setTimeout(() => URL.revokeObjectURL(adresse), 60000);
+}
+
+/* Un nom de fichier sans caractères interdits : « Mon vlog : jour 1 »
+   → « Mon vlog - jour 1 » */
+function nomDeFichier(nom) {
+  const propre = String(nom || '').replace(/[\\/:*?"<>|]+/g, ' - ').replace(/\s+/g, ' ').trim().slice(0, 80);
+  return propre || 'Omni-Video';
+}
+
+
 /* ---------- Boutons « deux appuis » ----------
    Pour les actions qui font perdre quelque chose (supprimer, retirer) :
    le premier appui « arme » le bouton (il change de texte et de couleur),

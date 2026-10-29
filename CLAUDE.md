@@ -12,7 +12,7 @@ Vérifier ma tablette, À propos.
 ## Construction par étapes
 
 0 fondations ✅ · a import et lecture ✅ · b chronologie ✅ · c texte et images ✅ ·
-d audio ✅ · e transitions ✅ · f sous-titres · g export MP4 · h hors ligne et
+d audio ✅ · e transitions ✅ · f sous-titres ✅ · g export MP4 · h hors ligne et
 installation. Après chaque étape : expliquer comment tester sur la tablette.
 À la fin : ajouter Omni-Vidéo au portfolio (`omni-systeme/index.html` et son
 README), dans le groupe « Création de contenu ».
@@ -73,7 +73,8 @@ README), dans le groupe « Création de contenu ».
 - `Medias.fichiers` (Map id → File/Blob) n'existe que pendant la visite.
 - `projet.clips` : `[{ id, mediaId, debut, fin, volume }]`, joués dans l'ordre ;
   `debut`/`fin` sont des secondes DANS le fichier d'origine (image : 0 → durée).
-  Annuler / Rétablir garde des copies JSON de `clips` ET `calques` (60 au plus) ;
+  Annuler / Rétablir garde des copies JSON de `clips`, `calques`, `pistes`,
+  transitions et sous-titres (60 au plus) ;
   une seule étape par séance de modification d'un calque (`_avantChangement`).
 - `projet.calques` : textes et images incrustées, `debut`/`duree` en secondes
   du MONTAGE (pas d'un clip : ils ne suivent pas les clips déplacés), `x`/`y`
@@ -108,6 +109,17 @@ README), dans le groupe « Création de contenu ».
 - Aperçu du son : un `<audio>` par piste, recalé s'il s'écarte de plus de
   0,25 s ; volume du clip par `el.volume` (0 à 1) ; `Lecteur.muet` pendant
   l'enregistrement.
+- `projet.sousTitres` : `[{ id, debut, duree, texte }]`, temps du MONTAGE,
+  toujours triés par `debut` (5000 au plus) ; `projet.styleSousTitres` =
+  `{ taille, place, fond, couleur, visibles }`, le même pour tous.
+  `Rendu.dessiner()` les dessine EN DERNIER (par-dessus les calques), police
+  « simple », via `dessinerTexte()` avec une marge de 7 % (`calque.marge`).
+  Dans l'aperçu, toucher un sous-titre ouvre son éditeur (pas de déplacement
+  au doigt). Un sous-titre laissé vide disparaît en fermant l'éditeur.
+  Import (`sous-titres.js`) : `lireSousTitres()` comprend .srt et .vtt, enlève
+  les balises ; `lireFichierTexte()` essaie UTF-8 puis Windows-1252 (vieux
+  .srt français). Pas de filtre `accept` sur le sélecteur : Android ne
+  reconnaît pas toujours les .srt. Annuler / Rétablir les garde aussi.
 - ⚠️ `rendu.js` dessine les calques pour l'aperçu ET pour l'export : ne jamais
   dessiner un calque autrement à l'export, sinon l'aperçu mentirait.
 - ⚠️ `nettoyerProjet()` et `nettoyerMedia()` ne gardent **que** les champs

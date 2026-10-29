@@ -161,7 +161,56 @@ function nettoyerProjet(brut) {
       : [],
     // Fondu au noir au tout début et à la toute fin de la vidéo
     transitionDebut: nettoyerTransition(brut.transitionDebut, TYPES_TRANSITION_BORD),
-    transitionFin: nettoyerTransition(brut.transitionFin, TYPES_TRANSITION_BORD)
+    transitionFin: nettoyerTransition(brut.transitionFin, TYPES_TRANSITION_BORD),
+    sousTitres: nettoyerSousTitres(brut.sousTitres),
+    styleSousTitres: nettoyerStyleSousTitres(brut.styleSousTitres)
+  };
+}
+
+/* Les sous-titres : ce qui est dit, écrit en bas de l'image.
+   - debut / duree : en secondes, dans la vidéo finale (comme les textes).
+   - texte : une ou deux lignes.
+   La liste est toujours rangée dans l'ordre du temps. */
+const SOUS_TITRES_MAX = 5000;
+const DUREE_SOUS_TITRE_MIN = 0.2;
+
+function nettoyerSousTitre(brut) {
+  if (!brut || typeof brut !== 'object' || typeof brut.id !== 'string') return null;
+  const nombre = (v, defaut, min, max) => borner(Number.isFinite(v) ? v : defaut, min, max);
+  return {
+    id: brut.id,
+    debut: nombre(brut.debut, 0, 0, DUREE_CALQUE_MAX),
+    duree: nombre(brut.duree, 3, DUREE_SOUS_TITRE_MIN, 60),
+    texte: typeof brut.texte === 'string' ? brut.texte.slice(0, 300) : ''
+  };
+}
+
+function nettoyerSousTitres(liste) {
+  if (!Array.isArray(liste)) return [];
+  return liste.slice(0, SOUS_TITRES_MAX).map(nettoyerSousTitre).filter(Boolean)
+    .sort((a, b) => a.debut - b.debut);
+}
+
+/* L'apparence des sous-titres : la même pour tous.
+   - taille : petite, normale ou grande
+   - place : en bas, un peu plus haut (YouTube Shorts cache le bas de
+     l'image avec ses boutons), ou en haut
+   - fond : bandeau sombre derrière le texte, ou contour noir
+   - visibles : faux = les sous-titres ne sont ni dans l'aperçu, ni dans
+     la vidéo finale (ils restent gardés) */
+const TAILLES_SOUS_TITRES = ['petite', 'normale', 'grande'];
+const PLACES_SOUS_TITRES = ['bas', 'releve', 'haut'];
+const FONDS_SOUS_TITRES = ['bandeau', 'contour'];
+const COULEURS_SOUS_TITRES = ['#ffffff', '#ffd84d'];
+
+function nettoyerStyleSousTitres(brut) {
+  const s = brut && typeof brut === 'object' ? brut : {};
+  return {
+    taille: TAILLES_SOUS_TITRES.includes(s.taille) ? s.taille : 'normale',
+    place: PLACES_SOUS_TITRES.includes(s.place) ? s.place : 'bas',
+    fond: FONDS_SOUS_TITRES.includes(s.fond) ? s.fond : 'bandeau',
+    couleur: COULEURS_SOUS_TITRES.includes(s.couleur) ? s.couleur : '#ffffff',
+    visibles: s.visibles !== false
   };
 }
 

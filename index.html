@@ -32,6 +32,7 @@
 <script defer src="./chronologie.js"></script>
 <script defer src="./incrustations.js"></script>
 <script defer src="./audio.js"></script>
+<script defer src="./sous-titres.js"></script>
 <script defer src="./projets.js"></script>
 <script defer src="./app.js"></script>
 </head>
@@ -60,6 +61,8 @@
     <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol>
     <symbol id="i-muet" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l4 6M21 9l-4 6"/></g></symbol>
     <symbol id="i-son" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 8a5 5 0 0 1 0 8M19.5 5.5a9 9 0 0 1 0 13"/></g></symbol>
+    <symbol id="i-sous-titres" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 13h5M14 13h4M6 16.5h9M17 16.5h1"/></g></symbol>
+    <symbol id="i-telecharger" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></g></symbol>
     <symbol id="i-texte" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6V4h16v2M12 4v16M9 20h6"/></g></symbol>
     <symbol id="i-ciseaux" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/></g></symbol>
     <symbol id="i-enlever-avant" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v18"/><rect x="16" y="7" width="6" height="10" rx="1"/><path d="M3 8l7 8M10 8l-7 8"/></g></symbol>
@@ -177,7 +180,7 @@
       <p class="temps-montage"><span class="mono" id="montage-temps">0:00,0</span> <span class="discret">sur</span> <span class="mono" id="montage-duree">0:00</span></p>
     </div>
 
-    <!-- Le panneau de droite : trois onglets -->
+    <!-- Le panneau de droite : cinq onglets -->
     <div class="panneau">
       <div class="onglets" role="tablist" aria-label="Que veux-tu faire ?">
         <button type="button" class="onglet" role="tab" data-action="onglet" data-onglet="fichiers" aria-selected="true">
@@ -191,6 +194,9 @@
         </button>
         <button type="button" class="onglet" role="tab" data-action="onglet" data-onglet="son" aria-selected="false">
           <svg class="icone" aria-hidden="true"><use href="#i-musique"/></svg>Son
+        </button>
+        <button type="button" class="onglet" role="tab" data-action="onglet" data-onglet="sous-titres" aria-selected="false">
+          <svg class="icone" aria-hidden="true"><use href="#i-sous-titres"/></svg>Sous-titres
         </button>
       </div>
 
@@ -283,6 +289,77 @@
         <p class="aide">Le son de chaque clip vidéo se règle dans la chronologie : touche le clip, puis « Son du clip ».</p>
       </div>
 
+      <!-- Onglet « Sous-titres » : écrits à la main ou importés (voir sous-titres.js) -->
+      <div class="onglet-contenu" data-onglet="sous-titres" role="tabpanel" hidden>
+        <button type="button" class="bouton bouton-principal grand" data-action="ajouter-sous-titre">
+          <svg class="icone" aria-hidden="true"><use href="#i-plus"/></svg>Ajouter un sous-titre à la ligne violette
+        </button>
+        <button type="button" class="bouton grand" data-action="importer-sous-titres">
+          <svg class="icone" aria-hidden="true"><use href="#i-dossier"/></svg>Importer un fichier de sous-titres (.srt ou .vtt)
+        </button>
+
+        <details class="ed-section" id="st-apparence">
+          <summary>Apparence des sous-titres</summary>
+          <div class="ed-contenu">
+            <p class="etiquette">Taille</p>
+            <div class="ed-choix" role="group" aria-label="Taille des sous-titres">
+              <button type="button" class="bouton" data-action="style-sous-titres" data-reglage="taille" data-valeur="petite">Petite</button>
+              <button type="button" class="bouton" data-action="style-sous-titres" data-reglage="taille" data-valeur="normale">Normale</button>
+              <button type="button" class="bouton" data-action="style-sous-titres" data-reglage="taille" data-valeur="grande">Grande</button>
+            </div>
+            <p class="etiquette">Place</p>
+            <div class="ed-choix" role="group" aria-label="Place des sous-titres">
+              <button type="button" class="bouton" data-action="style-sous-titres" data-reglage="place" data-valeur="bas">En bas</button>
+              <button type="button" class="bouton" data-action="style-sous-titres" data-reglage="place" data-valeur="releve">Un peu plus haut</button>
+              <button type="button" class="bouton" data-action="style-sous-titres" data-reglage="place" data-valeur="haut">En haut</button>
+            </div>
+            <p class="aide">« Un peu plus haut » : pour les Shorts, dont le bas est caché par les boutons de YouTube.</p>
+            <p class="etiquette">Pour bien lire</p>
+            <div class="ed-choix" role="group" aria-label="Fond des sous-titres">
+              <button type="button" class="bouton" data-action="style-sous-titres" data-reglage="fond" data-valeur="bandeau">Bandeau sombre</button>
+              <button type="button" class="bouton" data-action="style-sous-titres" data-reglage="fond" data-valeur="contour">Contour noir</button>
+            </div>
+            <p class="etiquette">Couleur</p>
+            <div class="ed-choix" role="group" aria-label="Couleur des sous-titres">
+              <button type="button" class="bouton" data-action="style-sous-titres" data-reglage="couleur" data-valeur="#ffffff">Blanc</button>
+              <button type="button" class="bouton" data-action="style-sous-titres" data-reglage="couleur" data-valeur="#ffd84d">Jaune</button>
+            </div>
+            <label class="interrupteur"><input type="checkbox" id="st-visibles">
+              Montrer les sous-titres (dans l'aperçu et dans la vidéo finale)</label>
+          </div>
+        </details>
+
+        <details class="ed-section" id="st-decaler">
+          <summary>Décaler tous les sous-titres</summary>
+          <div class="ed-contenu">
+            <p class="aide">Si les sous-titres arrivent trop tôt ou trop tard par rapport à la voix, décale-les tous d'un coup.</p>
+            <div class="st-decalages">
+              <button type="button" class="bouton" data-action="decaler-sous-titres" data-secondes="-1">−1 s</button>
+              <button type="button" class="bouton" data-action="decaler-sous-titres" data-secondes="-0.1">−0,1 s</button>
+              <button type="button" class="bouton" data-action="decaler-sous-titres" data-secondes="0.1">+0,1 s</button>
+              <button type="button" class="bouton" data-action="decaler-sous-titres" data-secondes="1">+1 s</button>
+            </div>
+            <p class="aide">« − » : ils arrivent plus tôt. « + » : plus tard.</p>
+          </div>
+        </details>
+
+        <p class="etiquette" id="st-compte" hidden></p>
+        <ul class="liste-calques" id="liste-sous-titres"></ul>
+        <p class="vide" id="sous-titres-vide">Pas encore de sous-titres. Place la ligne violette là où quelqu'un parle,
+           touche « Ajouter un sous-titre », puis écris ce qui est dit. Tu peux aussi importer un fichier .srt ou .vtt.</p>
+
+        <div class="rangee-2" id="st-actions" hidden>
+          <button type="button" class="bouton" data-action="enregistrer-srt">
+            <svg class="icone" aria-hidden="true"><use href="#i-telecharger"/></svg>Enregistrer en fichier .srt
+          </button>
+          <button type="button" class="bouton" data-action="supprimer-tous-sous-titres">
+            <svg class="icone" aria-hidden="true"><use href="#i-poubelle"/></svg><span>Supprimer tous les sous-titres</span>
+          </button>
+        </div>
+        <p class="aide" id="st-aide-srt" hidden>Le fichier .srt peut aussi être envoyé sur YouTube (« Sous-titres »),
+           en plus des sous-titres incrustés dans l'image.</p>
+      </div>
+
       <!-- L'éditeur d'un texte ou d'une image incrustée (voir incrustations.js) -->
       <div class="editeur-calque" id="editeur-calque" hidden>
         <div class="editeur-entete">
@@ -345,6 +422,52 @@
           <svg class="icone" aria-hidden="true"><use href="#i-poubelle"/></svg><span>Supprimer ce texte</span>
         </button>
       </div>
+
+      <!-- L'éditeur d'un sous-titre (voir sous-titres.js) -->
+      <div class="editeur-calque" id="editeur-sous-titre" hidden>
+        <div class="editeur-entete">
+          <h3 id="st-titre">Sous-titre</h3>
+          <button type="button" class="bouton bouton-principal" data-action="fermer-sous-titre">✓ Terminé</button>
+        </div>
+        <div class="rangee-2">
+          <button type="button" class="bouton" data-action="sous-titre-voisin" data-sens="-1">
+            <svg class="icone" aria-hidden="true"><use href="#i-gauche"/></svg>Précédent
+          </button>
+          <button type="button" class="bouton" data-action="sous-titre-voisin" data-sens="1">
+            Suivant<svg class="icone" aria-hidden="true"><use href="#i-droite"/></svg>
+          </button>
+        </div>
+        <p class="avis" id="st-avertissement" hidden>Attention : ce moment est après la fin de la vidéo, il ne sera pas visible.
+           Place la ligne violette plus tôt, puis touche « Commence à la ligne ».</p>
+
+        <div class="ed-section">
+          <label class="champ" for="st-texte">Ce qui est dit</label>
+          <textarea id="st-texte" rows="2" maxlength="300" placeholder="Écris ici…"></textarea>
+          <p class="aide">Deux lignes au plus, c'est plus facile à lire. Va à la ligne avec la touche « Entrée ».</p>
+        </div>
+
+        <div class="ed-section">
+          <p class="mono" id="st-moment"></p>
+          <button type="button" class="bouton large" data-action="ecouter-sous-titre">
+            <svg class="icone" aria-hidden="true"><use href="#i-lecture"/></svg>Écouter ce passage
+          </button>
+          <div class="rangee-2">
+            <button type="button" class="bouton" data-action="sous-titre-debut-ligne">Commence à la ligne</button>
+            <button type="button" class="bouton" data-action="sous-titre-fin-ligne">Finit à la ligne</button>
+          </div>
+          <div class="rangee-2">
+            <button type="button" class="bouton" data-action="sous-titre-duree" data-secondes="-0.5">0,5 s de moins</button>
+            <button type="button" class="bouton" data-action="sous-titre-duree" data-secondes="0.5">0,5 s de plus</button>
+          </div>
+        </div>
+
+        <button type="button" class="bouton bouton-principal large" data-action="sous-titre-suivant">
+          <svg class="icone" aria-hidden="true"><use href="#i-plus"/></svg>Ajouter le sous-titre d'après
+        </button>
+        <button type="button" class="bouton large" data-action="supprimer-sous-titre">
+          <svg class="icone" aria-hidden="true"><use href="#i-poubelle"/></svg><span>Supprimer ce sous-titre</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -377,6 +500,8 @@
           <div class="chrono-regle" id="chrono-regle" aria-hidden="true"></div>
           <!-- Les textes et images incrustées, au-dessus des clips -->
           <div class="chrono-calques" id="chrono-calques"></div>
+          <!-- Les sous-titres, juste au-dessus des clips -->
+          <div class="chrono-sous-titres" id="chrono-sous-titres"></div>
           <div class="chrono-clips" id="chrono-clips"></div>
           <!-- Les pastilles des transitions, entre les clips (et au début, à la fin) -->
           <div class="chrono-transitions" id="chrono-transitions"></div>
@@ -433,6 +558,8 @@
   <input type="file" id="choisir-image" accept="image/*" multiple hidden>
   <input type="file" id="choisir-audio" accept="audio/*" multiple hidden>
   <input type="file" id="choisir-retrouver" accept="video/*" multiple hidden>
+  <!-- Pas de filtre : la tablette ne reconnaît pas toujours les fichiers .srt -->
+  <input type="file" id="choisir-sous-titres" hidden>
 </section>
 
 
@@ -674,6 +801,19 @@
     <div class="rangee-2">
       <button type="submit" class="bouton" value="annuler">Annuler</button>
       <button type="submit" class="bouton bouton-principal" value="ok">Valider</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Importer des sous-titres alors qu'il y en a déjà (voir sous-titres.js) -->
+<dialog id="fenetre-import-st" aria-labelledby="titre-import-st">
+  <form method="dialog">
+    <h2 id="titre-import-st">Importer des sous-titres</h2>
+    <p id="import-st-texte"></p>
+    <div class="pile-boutons">
+      <button type="submit" class="bouton bouton-principal" value="remplacer">Remplacer mes sous-titres actuels</button>
+      <button type="submit" class="bouton" value="ajouter">Les ajouter à mes sous-titres actuels</button>
+      <button type="submit" class="bouton" value="annuler">Annuler</button>
     </div>
   </form>
 </dialog>

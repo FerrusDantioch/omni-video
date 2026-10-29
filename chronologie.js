@@ -149,6 +149,7 @@ const Chronologie = {
     }).join('');
 
     this.dessinerCalques();
+    this.dessinerSousTitres();
     this.dessinerPistes();
     this.dessinerTransitions();
     $('#chronologie-vide').hidden = Lecteur.segments.length > 0;
@@ -177,6 +178,25 @@ const Chronologie = {
         'style="left:' + (this._marge + c.debut * this.pps).toFixed(1) + 'px;width:' + Math.max(18, c.duree * this.pps).toFixed(1) + 'px;top:' + (rangee * 19) + 'px" ' +
         'aria-label="Modifier : ' + proteger(libelle) + '">' +
         '<span>' + (c.type === 'texte' ? 'T ' : '▣ ') + proteger(libelle) + '</span></button>';
+    }).join('');
+  },
+
+  /* Les sous-titres, en petites barres grises juste au-dessus des clips
+     (une seule rangée : ils se suivent). Le sous-titre modifié est mis en
+     valeur. */
+  dessinerSousTitres() {
+    const projet = Projets.courant;
+    if (!projet) return;
+    const liste = projet.sousTitres;
+    $('#chrono-piste').style.setProperty('--h-st', liste.length ? '21px' : '0px');
+    $('#chrono-sous-titres').innerHTML = liste.map((s) => {
+      const largeur = Math.max(6, s.duree * this.pps);
+      const libelle = s.texte.trim().replace(/\n/g, ' ') || '…';
+      return '<button type="button" class="chrono-sous-titre' + (s.id === SousTitres.edite ? ' selectionne' : '') + '" ' +
+        'data-action="editer-sous-titre" data-id="' + proteger(s.id) + '" ' +
+        'style="left:' + (this._marge + s.debut * this.pps).toFixed(1) + 'px;width:' + largeur.toFixed(1) + 'px" ' +
+        'aria-label="Modifier le sous-titre : ' + proteger(libelle) + '">' +
+        (largeur > 30 ? '<span>' + proteger(libelle) + '</span>' : '') + '</button>';
     }).join('');
   },
 
@@ -411,7 +431,8 @@ const Chronologie = {
     const p = Projets.courant;
     return JSON.stringify({
       clips: p.clips, calques: p.calques, pistes: p.pistes,
-      transitionDebut: p.transitionDebut, transitionFin: p.transitionFin, t: Lecteur.t
+      transitionDebut: p.transitionDebut, transitionFin: p.transitionFin,
+      sousTitres: p.sousTitres, styleSousTitres: p.styleSousTitres, t: Lecteur.t
     });
   },
 
@@ -424,6 +445,8 @@ const Chronologie = {
     projet.pistes = (donnees.pistes || []).map((x) => nettoyerPiste(x, projet.medias)).filter(Boolean);
     projet.transitionDebut = nettoyerTransition(donnees.transitionDebut, TYPES_TRANSITION_BORD);
     projet.transitionFin = nettoyerTransition(donnees.transitionFin, TYPES_TRANSITION_BORD);
+    projet.sousTitres = nettoyerSousTitres(donnees.sousTitres);
+    projet.styleSousTitres = nettoyerStyleSousTitres(donnees.styleSousTitres);
     this._apresModification(donnees.t);
     PistesAudio.afficherListes();
     PistesAudio.synchroniser();
@@ -434,6 +457,13 @@ const Chronologie = {
     } else {
       Incrustations.afficherListes();
     }
+    // Pareil pour l'éditeur d'un sous-titre
+    SousTitres._nouveau = null;
+    if (SousTitres.edite) {
+      if (SousTitres.trouver(SousTitres.edite)) { SousTitres.majEditeur(); SousTitres._dejaMemorise = false; }
+      else SousTitres.fermerEditeur();
+    }
+    SousTitres.afficherListe();
     Incrustations.redessiner(true);
   },
 

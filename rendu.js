@@ -5,7 +5,7 @@
 /* ============================================================
    OMNI-VIDÉO — rendu.js
    Le dessin des « calques » (textes et images posés par-dessus la
-   vidéo) sur une toile (canvas).
+   vidéo) et des sous-titres sur une toile (canvas).
 
    ⚠️ Ce même dessin sert DEUX fois :
    - pour l'aperçu, pendant le montage ;
@@ -44,6 +44,13 @@ const NOMS_STYLES = { ombre: 'Ombre', contour: 'Contour', bandeau: 'Bandeau', au
 
 const DUREE_FONDU_CALQUE = 0.4;   // secondes d'apparition / disparition douce
 const MARGE_CALQUE = 0.04;        // un calque ne sort jamais du cadre (4 % de marge)
+
+/* Les sous-titres : taille (en % du côté le plus court), place (0 = en
+   haut, 1 = en bas) et marge plus large que celle des textes, pour rester
+   loin des bords de l'écran. */
+const TAILLE_SOUS_TITRES = { petite: 4, normale: 5, grande: 6.5 };
+const Y_SOUS_TITRES = { bas: 1, releve: 0.74, haut: 0 };
+const MARGE_SOUS_TITRES = 0.07;
 
 const Rendu = {
   /* Images incrustées déjà prêtes à dessiner (numéro du média → image) */
@@ -128,13 +135,53 @@ const Rendu = {
         if (opts.selection === calque.id) this._cadreSelection(ctx, place, hauteur);
       }
     }
+    // Les sous-titres en dernier : toujours par-dessus tout le reste
+    const sousTitre = this.dessinerSousTitres(ctx, largeur, hauteur, projet, t, opts.selection);
+    if (sousTitre) {
+      places.push(sousTitre);
+      if (opts.selection === sousTitre.id) this._cadreSelection(ctx, sousTitre, hauteur);
+    }
     return places;
+  },
+
+  /* ---------- Les sous-titres ---------- */
+
+  /* Les sous-titres à l'écran à l'instant t (aucun s'ils sont cachés) */
+  sousTitresActifs(projet, t) {
+    if (!projet.sousTitres || !projet.styleSousTitres.visibles) return [];
+    return projet.sousTitres.filter((s) => t >= s.debut && t < s.debut + s.duree && s.texte.trim());
+  },
+
+  /* Dessine les sous-titres de l'instant t (s'il y en a deux en même
+     temps, l'un au-dessus de l'autre). Ils sont dessinés comme un texte,
+     avec une police simple et très lisible, centrés. */
+  dessinerSousTitres(ctx, largeur, hauteur, projet, t, selection) {
+    const actifs = this.sousTitresActifs(projet, t);
+    if (!actifs.length) return null;
+    const style = projet.styleSousTitres;
+    ctx.save();
+    const place = this.dessinerTexte(ctx, largeur, hauteur, {
+      texte: actifs.map((s) => s.texte.trim()).join('\n'),
+      police: 'simple',
+      taille: TAILLE_SOUS_TITRES[style.taille],
+      couleur: style.couleur,
+      style: style.fond,
+      gras: style.fond === 'contour',
+      x: 0.5,
+      y: Y_SOUS_TITRES[style.place],
+      marge: MARGE_SOUS_TITRES
+    });
+    ctx.restore();
+    if (!place) return null;
+    const id = actifs.some((s) => s.id === selection) ? selection : actifs[0].id;
+    return Object.assign({ id, sousTitre: true }, place);
   },
 
   /* Place un rectangle centré sur (x, y), sans sortir du cadre */
   _placer(calque, largeur, hauteur, l, h) {
-    const mx = largeur * MARGE_CALQUE;
-    const my = hauteur * MARGE_CALQUE;
+    const marge = calque.marge || MARGE_CALQUE;
+    const mx = largeur * marge;
+    const my = hauteur * marge;
     const x = borner(calque.x * largeur - l / 2, mx, Math.max(mx, largeur - mx - l));
     const y = borner(calque.y * hauteur - h / 2, my, Math.max(my, hauteur - my - h));
     return { x, y, l, h };
@@ -154,7 +201,7 @@ const Rendu = {
     ctx.textBaseline = 'middle';
 
     // Coupe le texte en lignes qui tiennent dans la largeur de l'image
-    const largeurMax = () => largeur * (1 - 2 * MARGE_CALQUE) - taille * 0.8;
+    const largeurMax = () => largeur * (1 - 2 * (calque.marge || MARGE_CALQUE)) - taille * 0.8;
     let lignes = this._lignes(ctx, texte, largeurMax());
     let largeurTexte = Math.max(...lignes.map((l) => ctx.measureText(l).width));
     // Un mot à lui seul plus large que l'image : on réduit le texte pour qu'il tienne

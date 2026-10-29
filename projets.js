@@ -109,6 +109,7 @@ const Projets = {
     if (Enregistreur.enCours) Enregistreur.arreter();
     Visionneuse.fermer();
     Incrustations.fermerEditeur();
+    SousTitres.fermerEditeur();
     Lecteur.vider();
     PistesAudio.vider();
     this.courant = null;

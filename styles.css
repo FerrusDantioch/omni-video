@@ -610,13 +610,15 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
   border-radius: 8px;
   background: var(--fond);
 }
-/* Les lignes « textes et images » et « sons » n'apparaissent que si elles
-   contiennent quelque chose (chronologie.js règle --h-calques et --h-pistes) */
+/* Les lignes « textes et images », « sous-titres » et « sons » n'apparaissent
+   que si elles contiennent quelque chose (chronologie.js règle --h-calques,
+   --h-st et --h-pistes) */
 .chrono-piste {
   --h-calques: 0px;
+  --h-st: 0px;
   --h-pistes: 0px;
   position: relative;
-  height: calc(26px + var(--h-calques) + 80px + var(--h-pistes) + 4px);
+  height: calc(26px + var(--h-calques) + var(--h-st) + 80px + var(--h-pistes) + 4px);
   /* un appui long n'ouvre pas le menu « copier / sélectionner » */
   user-select: none;
   -webkit-user-select: none;
@@ -652,7 +654,28 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
 }
 .chrono-calque-image { background: color-mix(in srgb, var(--bleu) 45%, var(--fond)); border-color: var(--bleu); }
 .chrono-calque span { pointer-events: none; }
-.chrono-clips { position: absolute; left: 0; right: 0; top: calc(26px + var(--h-calques)); height: 76px; }
+/* La ligne des sous-titres (une rangée, barres grises) */
+.chrono-sous-titres { position: absolute; left: 0; right: 0; top: calc(26px + var(--h-calques)); height: var(--h-st); }
+.chrono-sous-titre {
+  position: absolute;
+  top: 0;
+  height: 17px;
+  padding: 0 4px;
+  border: 1px solid var(--discret);
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--texte);
+  font: 0.72rem/15px var(--f-texte);
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  touch-action: pan-x;
+}
+.chrono-sous-titre.selectionne { border-color: var(--halo); background: color-mix(in srgb, var(--accent) 30%, var(--fond)); }
+.chrono-sous-titre span { pointer-events: none; }
+.chrono-clips { position: absolute; left: 0; right: 0; top: calc(26px + var(--h-calques) + var(--h-st)); height: 76px; }
 
 /* Les pastilles des transitions, posées sur la ligne des clips. Le
    conteneur laisse passer le doigt ; seules les pastilles l'attrapent. */
@@ -660,7 +683,7 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
   position: absolute;
   left: 0;
   right: 0;
-  top: calc(26px + var(--h-calques));
+  top: calc(26px + var(--h-calques) + var(--h-st));
   height: 76px;
   pointer-events: none;
   z-index: 2;
@@ -691,7 +714,7 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
 }
 
 /* La ligne de la musique et des voix off, sous les clips */
-.chrono-pistes { position: absolute; left: 0; right: 0; top: calc(26px + var(--h-calques) + 80px); height: var(--h-pistes); }
+.chrono-pistes { position: absolute; left: 0; right: 0; top: calc(26px + var(--h-calques) + var(--h-st) + 80px); height: var(--h-pistes); }
 .chrono-piste-audio {
   position: absolute;
   height: 17px;
@@ -782,7 +805,8 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
 
 /* ---------- 9 ter. Onglets du panneau de droite ---------- */
 
-.onglets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+/* Cinq onglets, toujours sur une seule rangée (le texte va à la ligne s'il le faut) */
+.onglets { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .onglet {
   display: flex;
   flex-direction: column;
@@ -790,12 +814,14 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
   justify-content: center;
   gap: 4px;
   min-height: 64px;
-  padding: 6px 4px;
+  padding: 6px 2px;
   border: 2px solid var(--bord-bouton);
   border-radius: var(--rayon-bouton);
   background: var(--surface);
   color: var(--discret);
-  font: 700 0.98rem/1.2 var(--f-titre);
+  font: 700 0.86rem/1.15 var(--f-titre);
+  text-align: center;
+  overflow-wrap: anywhere;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -947,6 +973,14 @@ textarea:focus { border-color: var(--accent); outline: none; }
 }
 .carte-piste-voix { border-left-color: var(--danger); }
 .carte-piste .rangee-2 .bouton { min-height: 52px; font-size: 0.95rem; padding: 6px 8px; }
+
+/* Onglet « Sous-titres » */
+.st-decalages { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.st-decalages .bouton { min-height: 52px; padding: 6px 4px; font-family: var(--f-chiffres); }
+.carte-sous-titre { border-left-color: var(--discret); }
+.carte-sous-titre .calque-apercu { font-weight: 400; font-size: 1rem; }
+.carte-sous-titre.en-cours { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.pile-boutons { display: grid; gap: 10px; }
 
 /* Enregistrement de la voix : un bouton rouge doux et un compteur, sans
    clignotement ; le reste du montage est grisé pour éviter les fausses

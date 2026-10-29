@@ -5,7 +5,8 @@
 /* ============================================================
    OMNI-VIDÉO — incrustations.js
    Les textes et les images posés par-dessus la vidéo (les « calques »).
-   - Les onglets du panneau de droite : Mes fichiers, Textes, Images.
+   - Les onglets du panneau de droite : Mes fichiers, Textes, Images,
+     Son, Sous-titres.
    - La liste des textes et des images incrustées.
    - L'éditeur : le texte, la police, la taille, la couleur, le style,
      la place dans l'image et le moment où il apparaît.
@@ -40,11 +41,13 @@ const Onglets = {
 
   ouvrir(nom) {
     Incrustations.fermerEditeur();
+    SousTitres.fermerEditeur();
     this.actif = nom;
     $$('.onglet').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.onglet === nom)));
     $$('.onglet-contenu').forEach((zone) => { zone.hidden = zone.dataset.onglet !== nom; });
     if (nom === 'textes' || nom === 'images') Incrustations.afficherListes();
     if (nom === 'son') PistesAudio.afficherListes();
+    if (nom === 'sous-titres') SousTitres.afficherListe();
   }
 };
 
@@ -109,13 +112,14 @@ const Incrustations = {
 
     // Rien n'a changé depuis le dernier dessin ? On ne refait rien.
     const t = Lecteur.t;
-    const cle = Rendu.actifs(projet, t).map((c) => c.id + ':' + Rendu.opacite(c, t).toFixed(2)).join(',') + '|' + this.edite;
+    const cle = Rendu.actifs(projet, t).map((c) => c.id + ':' + Rendu.opacite(c, t).toFixed(2)).join(',') + '|' +
+      Rendu.sousTitresActifs(projet, t).map((s) => s.id).join(',') + '|' + this.edite + '|' + SousTitres.edite;
     if (!force && cle === this._cle) return;
     this._cle = cle;
 
     ctx.clearRect(0, 0, l, h);
     this._places = Rendu.dessiner(ctx, l, h, projet, t, {
-      selection: this.edite,
+      selection: this.edite || SousTitres.edite,
       quandPret: () => this.redessiner(true)
     });
   },
@@ -137,6 +141,12 @@ const Incrustations = {
   _doigtPose(e) {
     if (!Projets.courant) return;
     const touche = this._sousLeDoigt(e);
+    // Toucher un sous-titre : on ouvre son éditeur (il ne se déplace pas au
+    // doigt : sa place se règle pour tous dans « Apparence »)
+    if (touche && SousTitres.trouver(touche)) {
+      if (touche !== SousTitres.edite) { Lecteur.pause(); SousTitres.ouvrirEditeur(touche); }
+      return;
+    }
     // Toucher un autre calque : on passe à celui-là
     if (touche && touche !== this.edite) {
       Lecteur.pause();
@@ -237,6 +247,7 @@ const Incrustations = {
     const calque = this.calque(id);
     if (!calque) return;
     Lecteur.pause();
+    SousTitres.fermerEditeur();
     // L'onglet qui correspond (Textes ou Images) devient l'onglet ouvert
     const onglet = calque.type === 'texte' ? 'textes' : 'images';
     if (Onglets.actif !== onglet) {
@@ -247,6 +258,7 @@ const Incrustations = {
     this._dejaMemorise = !!dejaMemorise;
     $$('.onglet-contenu').forEach((zone) => { zone.hidden = true; });
     $('#editeur-calque').hidden = false;
+    $('.panneau').scrollTop = 0;   // l'éditeur s'ouvre en haut, même après une longue liste
     // La ligne violette va sur le calque, pour qu'on le voie dans l'aperçu
     // (pas tout au bord : avec l'apparition en douceur, il y serait invisible)
     const bord = calque.fondu ? Math.min(DUREE_FONDU_CALQUE, calque.duree / 3) : 0;

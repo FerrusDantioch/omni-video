@@ -12,7 +12,7 @@
 
 /* Numéro de version affiché dans « À propos ». À changer à chaque
    nouvelle version publiée. */
-const VERSION = '0.5.0';
+const VERSION = '0.6.0';
 
 /* ---------- 1. Navigation entre les écrans ----------
    Chaque écran est une <section class="vue" data-vue="…">.
@@ -157,7 +157,24 @@ const ACTIONS = {
 
   // Transitions
   'choisir-transition':   (b) => Chronologie.ouvrirTransition(b.dataset.cle),
-  'transition-clip':      () => Chronologie.transitionDuClip()
+  'transition-clip':      () => Chronologie.transitionDuClip(),
+
+  // Sous-titres
+  'ajouter-sous-titre':        () => SousTitres.ajouter(),
+  'importer-sous-titres':      () => SousTitres.choisirFichier(),
+  'editer-sous-titre':         (b) => SousTitres.ouvrirEditeur(b.dataset.id),
+  'fermer-sous-titre':         () => SousTitres.fermerEditeur(),
+  'sous-titre-voisin':         (b) => SousTitres.voisin(Number(b.dataset.sens)),
+  'ecouter-sous-titre':        () => SousTitres.ecouter(),
+  'sous-titre-debut-ligne':    () => SousTitres.commencerALaLigne(),
+  'sous-titre-fin-ligne':      () => SousTitres.finirALaLigne(),
+  'sous-titre-duree':          (b) => SousTitres.changerDuree(Number(b.dataset.secondes)),
+  'sous-titre-suivant':        () => SousTitres.ajouterSuivant(),
+  'supprimer-sous-titre':      (b) => SousTitres.supprimer(b),
+  'supprimer-tous-sous-titres': (b) => SousTitres.supprimerTous(b),
+  'style-sous-titres':         (b) => SousTitres.changerStyle(b.dataset.reglage, b.dataset.valeur),
+  'decaler-sous-titres':       (b) => SousTitres.decaler(Number(b.dataset.secondes)),
+  'enregistrer-srt':           () => SousTitres.enregistrerSrt()
 };
 
 document.addEventListener('click', (evenement) => {
@@ -208,6 +225,7 @@ async function demarrer() {
   Chronologie.initialiser();
   Incrustations.initialiser();
   PistesAudio.initialiser();
+  SousTitres.initialiser();
   // Les polices sont chargées tout de suite (la toile ne les attend pas)
   Rendu.chargerPolices().then(() => Incrustations.redessiner(true));
 

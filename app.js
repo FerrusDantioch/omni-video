@@ -12,7 +12,7 @@
 
 /* Numéro de version affiché dans « À propos ». À changer à chaque
    nouvelle version publiée. */
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 
 /* ---------- 1. Navigation entre les écrans ----------
    Chaque écran est une <section class="vue" data-vue="…">.
@@ -120,7 +120,31 @@ const ACTIONS = {
   'enlever-apres':    () => Chronologie.enleverApres(),
   'deplacer-clip':    (b) => Chronologie.deplacerClip(Number(b.dataset.sens)),
   'duree-image':      (b) => Chronologie.dureeImage(Number(b.dataset.secondes)),
-  'supprimer-clip':   (b) => Chronologie.supprimerClip(b)
+  'supprimer-clip':   (b) => Chronologie.supprimerClip(b),
+
+  // Onglets, textes et images incrustées
+  'onglet':               (b) => Onglets.ouvrir(b.dataset.onglet),
+  'ajouter-texte':        () => Incrustations.ajouterTexte(),
+  'choisir-incrustation': () => Incrustations.montrerChoixImages(),
+  'incruster-image':      (b) => Incrustations.ajouterImage(b.dataset.id),
+  'editer-calque':        (b) => Incrustations.ouvrirEditeur(b.dataset.id),
+  'fermer-editeur':       () => Incrustations.fermerEditeur(),
+  'calque-police':        (b) => Incrustations.changer('police', b.dataset.police),
+  'calque-couleur':       (b) => Incrustations.changer('couleur', b.dataset.couleur),
+  'calque-style':         (b) => Incrustations.changer('style', b.dataset.style),
+  'calque-place':         (b) => {
+    const c = Incrustations.calque(Incrustations.edite);
+    if (!c) return;
+    Incrustations.changer('x', Number(b.dataset.x));
+    Incrustations.changer('y', Number(b.dataset.y));
+  },
+  'calque-debut-ligne':   () => Incrustations.commencerALaLigne(),
+  'calque-fin-ligne':     () => Incrustations.finirALaLigne(),
+  'calque-duree':         (b) => {
+    const c = Incrustations.calque(Incrustations.edite);
+    if (c) Incrustations.changer('duree', c.duree + Number(b.dataset.secondes));
+  },
+  'supprimer-calque':     (b) => Incrustations.supprimer(b)
 };
 
 document.addEventListener('click', (evenement) => {
@@ -169,6 +193,9 @@ async function demarrer() {
   Visionneuse.initialiser();
   Lecteur.initialiser();
   Chronologie.initialiser();
+  Incrustations.initialiser();
+  // Les polices sont chargées tout de suite (la toile ne les attend pas)
+  Rendu.chargerPolices().then(() => Incrustations.redessiner(true));
 
   // L'application est prête à s'afficher
   $('#chargement').hidden = true;

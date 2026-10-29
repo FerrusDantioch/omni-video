@@ -610,7 +610,7 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
 }
 .chrono-piste {
   position: relative;
-  height: 112px;
+  height: 150px;
   /* un appui long n'ouvre pas le menu « copier / sélectionner » */
   user-select: none;
   -webkit-user-select: none;
@@ -626,7 +626,27 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
   font: 0.75rem/1.2 var(--f-chiffres);
   white-space: nowrap;
 }
-.chrono-clips { position: absolute; left: 0; right: 0; top: 28px; height: 76px; }
+/* La ligne des textes et images incrustées (deux rangées de 17 px) */
+.chrono-calques { position: absolute; left: 0; right: 0; top: 26px; height: 36px; }
+.chrono-calque {
+  position: absolute;
+  height: 17px;
+  padding: 0 6px;
+  border: 1px solid var(--halo);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--accent) 55%, var(--fond));
+  color: var(--texte);
+  font: 600 0.72rem/15px var(--f-titre);
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  touch-action: pan-x;
+}
+.chrono-calque-image { background: color-mix(in srgb, var(--bleu) 45%, var(--fond)); border-color: var(--bleu); }
+.chrono-calque span { pointer-events: none; }
+.chrono-clips { position: absolute; left: 0; right: 0; top: 66px; height: 76px; }
 .chrono-clip {
   position: absolute;
   top: 0;
@@ -672,7 +692,7 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
 }
 .chrono-vide {
   position: absolute;
-  inset: 28px 16px auto;
+  inset: 66px 16px auto;
   padding: 10px;
   text-align: center;
   color: var(--discret);
@@ -688,7 +708,156 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
 .outils-boutons .outil-image { flex: 0 1 90px; font-family: var(--f-chiffres); }
 
 
-/* ---------- 9 ter. Fenêtre « Voir un fichier » ---------- */
+/* La toile des textes et images, posée sur la vidéo de l'aperçu.
+   « touch-action: none » : faire glisser un texte ne fait pas défiler la page. */
+.toile-calques { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; touch-action: none; }
+
+
+/* ---------- 9 ter. Onglets du panneau de droite ---------- */
+
+.onglets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.onglet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 64px;
+  padding: 6px 4px;
+  border: 2px solid var(--bord-bouton);
+  border-radius: var(--rayon-bouton);
+  background: var(--surface);
+  color: var(--discret);
+  font: 700 0.98rem/1.2 var(--f-titre);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.onglet .icone { color: var(--discret); }
+.onglet[aria-selected="true"] {
+  color: var(--texte);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-2));
+}
+.onglet[aria-selected="true"] .icone { color: var(--accent); }
+.onglet-contenu { display: grid; gap: 14px; align-content: start; }
+
+/* Listes des textes et des images incrustées */
+.liste-calques { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.carte-calque {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: var(--carte-bord);
+  border-left: 4px solid var(--accent);
+  border-radius: 12px;
+}
+.carte-calque .bouton { grid-row: span 2; min-height: 52px; }
+.calque-apercu { font-size: 1.1rem; font-weight: 700; overflow-wrap: anywhere; white-space: pre-line; max-height: 3.2em; overflow: hidden; }
+.carte-calque-image { grid-template-columns: 64px 1fr auto; border-left-color: var(--bleu); }
+.carte-calque-image img { width: 64px; height: 48px; object-fit: cover; border-radius: 6px; }
+.carte-calque-image .bouton { grid-row: auto; }
+
+/* Choisir l'image à incruster */
+.choix-incrustation { display: grid; gap: 10px; padding: 12px; border: 2px dashed var(--trait); border-radius: 12px; }
+.choix-incrustation-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+.choix-image {
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: 2px solid var(--bord-bouton);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--texte);
+  font: 0.8rem/1.2 var(--f-texte);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.choix-image img { width: 100%; height: 72px; object-fit: contain; background: var(--fond); border-radius: 6px; }
+
+/* L'éditeur d'un texte ou d'une image */
+.editeur-calque { display: grid; gap: 12px; align-content: start; }
+.editeur-entete {
+  position: sticky;              /* « Terminé » reste toujours à portée de doigt */
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  background: var(--fond);
+}
+.ed-section { display: grid; gap: 8px; }
+details.ed-section {
+  padding: 4px 12px 12px;
+  background: var(--surface);
+  border: var(--carte-bord);
+  border-radius: 12px;
+}
+details.ed-section summary {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  font: 700 1rem var(--f-titre);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.ed-contenu { display: grid; gap: 10px; }
+textarea {
+  width: 100%;
+  min-height: 84px;
+  padding: 10px 14px;
+  border: 2px solid var(--bord-bouton);
+  border-radius: var(--rayon-bouton);
+  background: var(--fond);
+  color: var(--texte);
+  font: 1.1rem/1.4 var(--f-texte);
+  resize: vertical;
+}
+textarea:focus { border-color: var(--accent); outline: none; }
+.champ-curseur { display: grid; gap: 2px; font-family: var(--f-titre); font-weight: 600; }
+.ed-choix { display: flex; flex-wrap: wrap; gap: 8px; }
+.ed-choix .bouton { flex: 1 1 120px; min-height: 52px; padding: 6px 10px; }
+.ed-choix .bouton[aria-pressed="true"],
+.ed-places .bouton[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-2));
+}
+.ed-polices .bouton { font-weight: 700; letter-spacing: 0; }
+/* Les pastilles de couleur : un rond de la couleur, et son nom dessous */
+.ed-couleurs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.pastille-couleur {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-height: 64px;
+  padding: 6px 2px;
+  border: 2px solid var(--bord-bouton);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--texte);
+  font: 600 0.8rem var(--f-titre);
+  cursor: pointer;
+}
+.pastille-couleur::before {
+  content: "";
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--couleur);
+  border: 2px solid var(--discret);
+}
+.pastille-couleur[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 22%, var(--surface-2)); }
+.ed-places { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 320px; }
+.ed-places .bouton { min-height: 52px; font-size: 1.3rem; }
+.interrupteur { display: flex; align-items: center; gap: 12px; min-height: 48px; cursor: pointer; }
+.interrupteur input { width: 26px; height: 26px; accent-color: var(--accent); }
+
+
+/* ---------- 9 quater. Fenêtre « Voir un fichier » ---------- */
 
 dialog.fenetre-large { width: min(900px, calc(100vw - 24px)); padding: 18px; }
 .cadre-vision {

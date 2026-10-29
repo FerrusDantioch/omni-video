@@ -27,7 +27,9 @@
 <script defer src="./medias.js"></script>
 <script defer src="./visionneuse.js"></script>
 <script defer src="./lecteur.js"></script>
+<script defer src="./rendu.js"></script>
 <script defer src="./chronologie.js"></script>
+<script defer src="./incrustations.js"></script>
 <script defer src="./projets.js"></script>
 <script defer src="./app.js"></script>
 </head>
@@ -51,6 +53,7 @@
     <symbol id="i-tablette" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M11 18h2"/></g></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></g></symbol>
     <symbol id="i-format" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="7" width="13" height="9" rx="1.5"/><rect x="17" y="4" width="5" height="16" rx="1.5"/></g></symbol>
+    <symbol id="i-texte" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6V4h16v2M12 4v16M9 20h6"/></g></symbol>
     <symbol id="i-ciseaux" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/></g></symbol>
     <symbol id="i-enlever-avant" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v18"/><rect x="16" y="7" width="6" height="10" rx="1"/><path d="M3 8l7 8M10 8l-7 8"/></g></symbol>
     <symbol id="i-enlever-apres" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v18"/><rect x="2" y="7" width="6" height="10" rx="1"/><path d="M14 8l7 8M21 8l-7 8"/></g></symbol>
@@ -146,6 +149,8 @@
         <video id="montage-video-a" playsinline preload="auto"></video>
         <video id="montage-video-b" playsinline preload="auto"></video>
         <img id="montage-image" alt="" hidden>
+        <!-- Les textes et images incrustées, dessinés par-dessus (rendu.js) -->
+        <canvas class="toile-calques" id="montage-calques" aria-hidden="true"></canvas>
         <div class="apercu-message" id="montage-message">
           <svg class="icone" aria-hidden="true"><use href="#i-video"/></svg>
           <p id="montage-message-texte"></p>
@@ -164,9 +169,22 @@
       <p class="temps-montage"><span class="mono" id="montage-temps">0:00,0</span> <span class="discret">sur</span> <span class="mono" id="montage-duree">0:00</span></p>
     </div>
 
-    <!-- Mes fichiers : vidéos, images, musiques -->
+    <!-- Le panneau de droite : trois onglets -->
     <div class="panneau">
-      <h2>Mes fichiers</h2>
+      <div class="onglets" role="tablist" aria-label="Que veux-tu faire ?">
+        <button type="button" class="onglet" role="tab" data-action="onglet" data-onglet="fichiers" aria-selected="true">
+          <svg class="icone" aria-hidden="true"><use href="#i-dossier"/></svg>Mes fichiers
+        </button>
+        <button type="button" class="onglet" role="tab" data-action="onglet" data-onglet="textes" aria-selected="false">
+          <svg class="icone" aria-hidden="true"><use href="#i-texte"/></svg>Textes
+        </button>
+        <button type="button" class="onglet" role="tab" data-action="onglet" data-onglet="images" aria-selected="false">
+          <svg class="icone" aria-hidden="true"><use href="#i-image"/></svg>Images
+        </button>
+      </div>
+
+      <!-- Onglet « Mes fichiers » : vidéos, images, musiques -->
+      <div class="onglet-contenu" data-onglet="fichiers" role="tabpanel">
       <div class="boutons-import">
         <button type="button" class="bouton" data-action="importer" data-type="video">
           <svg class="icone" aria-hidden="true"><use href="#i-video"/></svg>Ajouter des vidéos
@@ -182,6 +200,101 @@
       <ul class="liste-medias" id="liste-medias"></ul>
       <p class="vide" id="medias-vide">Aucun fichier pour l'instant. Commence par ajouter tes vidéos :
          elles restent sur la tablette, rien n'est envoyé sur Internet.</p>
+      </div>
+
+      <!-- Onglet « Textes » : titres et textes posés sur la vidéo -->
+      <div class="onglet-contenu" data-onglet="textes" role="tabpanel" hidden>
+        <button type="button" class="bouton bouton-principal grand" data-action="ajouter-texte">
+          <svg class="icone" aria-hidden="true"><use href="#i-plus"/></svg>Ajouter un texte à la ligne violette
+        </button>
+        <ul class="liste-calques" id="liste-textes"></ul>
+        <p class="vide" id="textes-vide">Aucun texte pour l'instant. Place la ligne violette de la chronologie
+           là où le texte doit apparaître, puis touche « Ajouter un texte ».</p>
+      </div>
+
+      <!-- Onglet « Images » : images incrustées (logo, photo dans un coin…) -->
+      <div class="onglet-contenu" data-onglet="images" role="tabpanel" hidden>
+        <button type="button" class="bouton bouton-principal grand" data-action="choisir-incrustation">
+          <svg class="icone" aria-hidden="true"><use href="#i-plus"/></svg>Ajouter une image à la ligne violette
+        </button>
+        <div class="choix-incrustation" id="choix-incrustation" hidden>
+          <p>Touche l'image à poser sur la vidéo :</p>
+          <div class="choix-incrustation-liste" id="choix-incrustation-liste"></div>
+          <div id="choix-incrustation-vide" hidden>
+            <p class="aide">Tu n'as pas encore d'image dans ce projet.</p>
+            <button type="button" class="bouton large" data-action="importer" data-type="image">
+              <svg class="icone" aria-hidden="true"><use href="#i-image"/></svg>Ajouter des images
+            </button>
+          </div>
+        </div>
+        <ul class="liste-calques" id="liste-incrustations"></ul>
+        <p class="vide" id="incrustations-vide">Aucune image incrustée. Une image incrustée s'affiche PAR-DESSUS
+           la vidéo : un logo dans un coin, une photo, une flèche… Pour une image en plein écran entre deux
+           vidéos, utilise plutôt « Ajouter à la vidéo » dans « Mes fichiers ».</p>
+      </div>
+
+      <!-- L'éditeur d'un texte ou d'une image incrustée (voir incrustations.js) -->
+      <div class="editeur-calque" id="editeur-calque" hidden>
+        <div class="editeur-entete">
+          <h3 id="editeur-titre">Modifier le texte</h3>
+          <button type="button" class="bouton bouton-principal" data-action="fermer-editeur">✓ Terminé</button>
+        </div>
+        <p class="avis" id="ed-avertissement" hidden>Attention : ce moment est après la fin de la vidéo, il ne sera pas visible.
+           Place la ligne violette plus tôt, puis touche « Commence à la ligne ».</p>
+
+        <div class="ed-section ed-texte">
+          <label class="champ" for="ed-texte">Ton texte</label>
+          <textarea id="ed-texte" rows="3" maxlength="300" placeholder="Écris ici…"></textarea>
+        </div>
+
+        <details class="ed-section ed-texte" open>
+          <summary>Police, taille et couleur</summary>
+          <div class="ed-contenu">
+            <div class="ed-choix ed-polices" id="ed-polices" role="group" aria-label="Police"></div>
+            <label class="champ-curseur">Taille : <span class="mono" id="ed-taille-valeur"></span>
+              <input type="range" id="ed-taille" min="3" max="20" step="0.5">
+            </label>
+            <div class="ed-couleurs" id="ed-couleurs" role="group" aria-label="Couleur"></div>
+            <p class="etiquette">Pour bien lire le texte</p>
+            <div class="ed-choix ed-styles" id="ed-styles" role="group" aria-label="Style"></div>
+            <label class="interrupteur"><input type="checkbox" id="ed-gras"> Texte en gras</label>
+          </div>
+        </details>
+
+        <div class="ed-section ed-image">
+          <label class="champ-curseur">Taille de l'image : <span class="mono" id="ed-largeur-valeur"></span>
+            <input type="range" id="ed-largeur" min="5" max="100" step="1">
+          </label>
+        </div>
+
+        <details class="ed-section" open>
+          <summary>Place dans l'image</summary>
+          <div class="ed-contenu">
+            <p class="aide">Fais glisser du doigt dans l'aperçu, ou touche une place :</p>
+            <div class="ed-places" id="ed-places" role="group" aria-label="Place"></div>
+          </div>
+        </details>
+
+        <details class="ed-section" open>
+          <summary>Quand il apparaît</summary>
+          <div class="ed-contenu">
+            <p class="mono" id="ed-moment"></p>
+            <div class="rangee-2">
+              <button type="button" class="bouton" data-action="calque-debut-ligne">Commence à la ligne</button>
+              <button type="button" class="bouton" data-action="calque-fin-ligne">Finit à la ligne</button>
+            </div>
+            <div class="rangee-2">
+              <button type="button" class="bouton" data-action="calque-duree" data-secondes="-1">1 s de moins</button>
+              <button type="button" class="bouton" data-action="calque-duree" data-secondes="1">1 s de plus</button>
+            </div>
+            <label class="interrupteur"><input type="checkbox" id="ed-fondu"> Apparaît et disparaît en douceur</label>
+          </div>
+        </details>
+
+        <button type="button" class="bouton large" data-action="supprimer-calque">
+          <svg class="icone" aria-hidden="true"><use href="#i-poubelle"/></svg><span>Supprimer ce texte</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -212,6 +325,8 @@
       <div class="chrono-defilement" id="chrono-defilement">
         <div class="chrono-piste" id="chrono-piste">
           <div class="chrono-regle" id="chrono-regle" aria-hidden="true"></div>
+          <!-- Les textes et images incrustées, au-dessus des clips -->
+          <div class="chrono-calques" id="chrono-calques"></div>
           <div class="chrono-clips" id="chrono-clips"></div>
         </div>
       </div>

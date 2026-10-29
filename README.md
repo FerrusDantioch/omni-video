@@ -19,7 +19,7 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
 | 0. Fondations | Thème Omni-système, test de la tablette au démarrage, page À propos, licence, crédits | ✅ |
 | a. Import et lecture | Ajouter des vidéos, images et musiques ; miniatures ; lecture ; vidéos retrouvées à la réouverture | ✅ |
 | b. Chronologie | Couper, enlever le début ou la fin, déplacer, supprimer, assembler les clips ; Annuler / Rétablir ; aperçu du montage | ✅ |
-| c. Texte et images | Titres (police, taille, couleur, position, durée), images incrustées | à venir |
+| c. Texte et images | Textes (police, taille, couleur, style, position, durée, fondu), images incrustées ; déplacement au doigt dans l'aperçu | ✅ |
 | d. Audio | Musique de fond, voix off au micro, volumes | à venir |
 | e. Transitions | Fondu, fondu enchaîné, glissement | à venir |
 | f. Sous-titres | Saisie, import .srt / .vtt, incrustation | à venir |
@@ -38,6 +38,11 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
   ligne », « Enlever après la ligne », « Plus tôt », « Plus tard »,
   « Supprimer le clip ») s'appliquent au clip encadré en violet, celui qui est
   sous la ligne. Toute modification peut être annulée.
+- **Textes et images incrustées** (onglets « Textes » et « Images ») : ils
+  s'affichent par-dessus la vidéo, à partir de la ligne violette. On peut les
+  faire glisser du doigt dans l'aperçu, ou les toucher pour les modifier.
+  Ils restent à leur moment dans la vidéo : si l'on supprime ou déplace un
+  clip, il faut parfois les replacer.
 - **Le test de la tablette** (bouton « Vérifier ma tablette ») indique ce qui
   fonctionne : lecture des vidéos, fabrication du MP4, place disponible,
   mémoire, micro…
@@ -60,6 +65,8 @@ pouvoir les envoyer depuis un téléphone ou une tablette.
 | `visionneuse.js` | La fenêtre « Voir un fichier » (lecture d'une vidéo, d'une image ou d'une musique) |
 | `lecteur.js` | L'aperçu du montage : joue les clips les uns après les autres |
 | `chronologie.js` | La chronologie : la bande des clips, la ligne violette, les outils, Annuler / Rétablir |
+| `rendu.js` | Le dessin des textes et images incrustées (le même pour l'aperçu et pour la vidéo finale) ; polices et couleurs proposées |
+| `incrustations.js` | Les onglets, la liste et l'éditeur des textes et images incrustées, le déplacement au doigt |
 | `projets.js` | La liste des projets, la sauvegarde automatique, l'écran du projet |
 | `mediabunny.min.js` | La bibliothèque vidéo Mediabunny (ne pas modifier) |
 | `logo.svg` | Le logo : le dé à vingt faces de l'Omni-système |

@@ -152,8 +152,59 @@ function nettoyerProjet(brut) {
     cree: nombre(brut.cree, Date.now()),
     modifie: nombre(brut.modifie, Date.now()),
     medias,
-    clips
+    clips,
+    calques: Array.isArray(brut.calques)
+      ? brut.calques.map((c) => nettoyerCalque(c, medias)).filter(Boolean)
+      : []
   };
+}
+
+/* Un calque : un texte ou une image posé PAR-DESSUS la vidéo, pendant un
+   moment donné.
+   - debut / duree : en secondes, dans la vidéo finale (la chronologie).
+   - x / y : la place du centre, en fractions de l'image (0 = bord gauche
+     ou haut, 1 = bord droit ou bas). Ainsi, la place reste juste en
+     720p comme en 1080p, et même si on change de forme 16:9 ↔ 9:16.
+   - fondu : apparition et disparition en douceur.
+   Pour un texte : texte, police, taille (en % du côté le plus court de l'image),
+   couleur, style (ombre, contour, bandeau, aucun), gras.
+   Pour une image : mediaId (une image de « Mes fichiers ») et largeur
+   (en % de la largeur de l'image). */
+const POLICES_TEXTE = ['oxanium', 'literata', 'mono', 'simple', 'classique'];
+const STYLES_TEXTE = ['ombre', 'contour', 'bandeau', 'aucun'];
+const DUREE_CALQUE_MIN = 0.3;
+const DUREE_CALQUE_MAX = 3 * 3600;
+
+function nettoyerCalque(brut, medias) {
+  if (!brut || typeof brut !== 'object' || typeof brut.id !== 'string') return null;
+  if (brut.type !== 'texte' && brut.type !== 'image') return null;
+  const nombre = (v, defaut, min, max) => borner(Number.isFinite(v) ? v : defaut, min, max);
+  const commun = {
+    id: brut.id,
+    type: brut.type,
+    debut: nombre(brut.debut, 0, 0, DUREE_CALQUE_MAX),
+    duree: nombre(brut.duree, 4, DUREE_CALQUE_MIN, DUREE_CALQUE_MAX),
+    x: nombre(brut.x, 0.5, 0, 1),
+    y: nombre(brut.y, 0.5, 0, 1),
+    fondu: brut.fondu !== false
+  };
+  if (brut.type === 'texte') {
+    return Object.assign(commun, {
+      texte: typeof brut.texte === 'string' ? brut.texte.slice(0, 300) : '',
+      police: POLICES_TEXTE.includes(brut.police) ? brut.police : 'oxanium',
+      taille: nombre(brut.taille, 8, 3, 20),
+      couleur: /^#[0-9a-f]{6}$/i.test(brut.couleur) ? brut.couleur.toLowerCase() : '#ffffff',
+      style: STYLES_TEXTE.includes(brut.style) ? brut.style : 'ombre',
+      gras: brut.gras !== false
+    });
+  }
+  // Une image incrustée dont le fichier a été retiré du projet est oubliée
+  const media = medias.find((m) => m.id === brut.mediaId && m.type === 'image');
+  if (!media) return null;
+  return Object.assign(commun, {
+    mediaId: media.id,
+    largeur: nombre(brut.largeur, 30, 5, 100)
+  });
 }
 
 /* Un clip : un morceau d'une vidéo (ou une image) placé dans la

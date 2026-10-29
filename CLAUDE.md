@@ -11,7 +11,7 @@ Vérifier ma tablette, À propos.
 
 ## Construction par étapes
 
-0 fondations ✅ · a import et lecture ✅ · b chronologie ✅ · c texte et images ·
+0 fondations ✅ · a import et lecture ✅ · b chronologie ✅ · c texte et images ✅ ·
 d audio · e transitions · f sous-titres · g export MP4 · h hors ligne et
 installation. Après chaque étape : expliquer comment tester sur la tablette.
 À la fin : ajouter Omni-Vidéo au portfolio (`omni-systeme/index.html` et son
@@ -73,7 +73,16 @@ README), dans le groupe « Création de contenu ».
 - `Medias.fichiers` (Map id → File/Blob) n'existe que pendant la visite.
 - `projet.clips` : `[{ id, mediaId, debut, fin, volume }]`, joués dans l'ordre ;
   `debut`/`fin` sont des secondes DANS le fichier d'origine (image : 0 → durée).
-  Annuler / Rétablir garde des copies JSON de `clips` (60 au plus).
+  Annuler / Rétablir garde des copies JSON de `clips` ET `calques` (60 au plus) ;
+  une seule étape par séance de modification d'un calque (`_avantChangement`).
+- `projet.calques` : textes et images incrustées, `debut`/`duree` en secondes
+  du MONTAGE (pas d'un clip : ils ne suivent pas les clips déplacés), `x`/`y`
+  = centre en fractions 0–1 (le calque est ensuite gardé dans le cadre, marge
+  4 %). Texte : `taille` en % du CÔTÉ LE PLUS COURT de l'image (même aspect
+  en 16:9 et 9:16), réduit tout seul si un mot dépasse. Image : `largeur` en %
+  de la largeur.
+- ⚠️ `rendu.js` dessine les calques pour l'aperçu ET pour l'export : ne jamais
+  dessiner un calque autrement à l'export, sinon l'aperçu mentirait.
 - ⚠️ `nettoyerProjet()` et `nettoyerMedia()` ne gardent **que** les champs
   qu'elles connaissent : tout nouveau champ doit y être ajouté.
 - Positions des éléments (textes, images…) : en fractions de l'image (0 à 1),

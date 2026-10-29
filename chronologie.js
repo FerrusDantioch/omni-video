@@ -115,10 +115,31 @@ const Chronologie = {
         duree + '</div>';
     }).join('');
 
+    this.dessinerCalques();
     $('#chronologie-vide').hidden = Lecteur.segments.length > 0;
     this._indexAffiche = -2;
     this._placerBande(Lecteur.t);
     this.majPosition();
+  },
+
+  /* Les textes et images incrustées, en petites barres au-dessus des
+     clips. Deux rangées : quand deux calques se chevauchent dans le
+     temps, le second passe sur la rangée du dessous. */
+  dessinerCalques() {
+    const projet = Projets.courant;
+    if (!projet) return;
+    const finRangee = [-Infinity, -Infinity];
+    const calques = projet.calques.slice().sort((a, b) => a.debut - b.debut);
+    $('#chrono-calques').innerHTML = calques.map((c) => {
+      const rangee = c.debut >= finRangee[0] ? 0 : 1;
+      finRangee[rangee] = Math.max(finRangee[rangee], c.debut + c.duree);
+      const media = c.type === 'image' ? projet.medias.find((m) => m.id === c.mediaId) : null;
+      const libelle = c.type === 'texte' ? c.texte.trim().split('\n')[0] || 'Texte' : (media ? media.nom : 'Image');
+      return '<button type="button" class="chrono-calque chrono-calque-' + c.type + '" data-action="editer-calque" data-id="' + proteger(c.id) + '" ' +
+        'style="left:' + (this._marge + c.debut * this.pps).toFixed(1) + 'px;width:' + Math.max(18, c.duree * this.pps).toFixed(1) + 'px;top:' + (rangee * 19) + 'px" ' +
+        'aria-label="Modifier : ' + proteger(libelle) + '">' +
+        '<span>' + (c.type === 'texte' ? 'T ' : '▣ ') + proteger(libelle) + '</span></button>';
+    }).join('');
   },
 
   /* ---------- La bande et la ligne ---------- */
@@ -219,18 +240,28 @@ const Chronologie = {
     this._historique.push(this._photo());
     if (this._historique.length > HISTORIQUE_MAX) this._historique.shift();
     this._refaire = [];
+    this.majBoutonsHistorique();
   },
 
   _photo() {
-    return JSON.stringify({ clips: Projets.courant.clips, t: Lecteur.t });
+    return JSON.stringify({ clips: Projets.courant.clips, calques: Projets.courant.calques, t: Lecteur.t });
   },
 
   _restaurer(photo) {
     const projet = Projets.courant;
     const donnees = JSON.parse(photo);
-    // Un clip dont le fichier a été retiré du projet entre-temps est oublié
+    // Un clip ou une image dont le fichier a été retiré du projet entre-temps est oublié
     projet.clips = donnees.clips.map((c) => nettoyerClip(c, projet.medias)).filter(Boolean);
+    projet.calques = (donnees.calques || []).map((c) => nettoyerCalque(c, projet.medias)).filter(Boolean);
     this._apresModification(donnees.t);
+    // L'éditeur ouvert suit (ou se ferme si son calque n'existe plus)
+    if (Incrustations.edite) {
+      if (Incrustations.calque(Incrustations.edite)) { Incrustations.majEditeur(); Incrustations._dejaMemorise = false; }
+      else Incrustations.fermerEditeur();
+    } else {
+      Incrustations.afficherListes();
+    }
+    Incrustations.redessiner(true);
   },
 
   annuler() {

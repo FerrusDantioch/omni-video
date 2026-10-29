@@ -88,6 +88,7 @@ const Projets = {
     this.courant = projet;
     await Medias.chargerFichiersLegers(projet);
     allerA('projet');
+    Onglets.ouvrir('fichiers');
     Chronologie.ouvrir(projet);
   },
 
@@ -96,8 +97,11 @@ const Projets = {
     if (!this.courant) return;
     this.enregistrerMaintenant();
     Visionneuse.fermer();
+    Incrustations.fermerEditeur();
     Lecteur.vider();
     this.courant = null;
+    Rendu.oublierImages();
+    Incrustations.redessiner(true);
   },
 
   /* ---------- Sauvegarde automatique ----------
@@ -264,6 +268,8 @@ const Projets = {
     } else {
       this.rafraichirMontage();
     }
+    // Le choix des images à incruster était ouvert : il montre les nouvelles
+    if (type === 'image' && !$('#choix-incrustation').hidden) Incrustations.montrerChoixImages(true);
     // Demande à la tablette de ne pas effacer nos données (une fois suffit)
     Persistance.demander();
 
@@ -331,12 +337,15 @@ const Projets = {
     const projet = this.courant;
     if (!projet) return;
     const n = utilisations(projet, id);
-    const question = n ? 'Retirer, et ses ' + (n > 1 ? n + ' clips' : 'son clip') + ' ?' : 'Retirer du projet ?';
+    const question = n > 1 ? 'Retirer, et ses ' + n + ' utilisations ?' : n === 1 ? 'Retirer, et son utilisation ?' : 'Retirer du projet ?';
     armerBouton(bouton, question, async () => {
       if (projet !== this.courant) return;
       if (Visionneuse.media && Visionneuse.media.id === id) Visionneuse.fermer();
-      // Les clips de ce fichier quittent la chronologie
+      // Les clips et les incrustations de ce fichier quittent la vidéo
       projet.clips = projet.clips.filter((c) => c.mediaId !== id);
+      projet.calques = projet.calques.filter((c) => c.mediaId !== id);
+      Rendu.oublierImages();
+      if (Incrustations.edite && !Incrustations.calque(Incrustations.edite)) Incrustations.fermerEditeur();
       await Medias.retirer(projet, id);
       this.modifie();
       this.afficherProjet();
@@ -347,9 +356,11 @@ const Projets = {
   }
 };
 
-/* Combien de fois un fichier est-il utilisé dans la chronologie ? */
+/* Combien de fois un fichier est-il utilisé dans la vidéo (clips et
+   images incrustées) ? */
 function utilisations(projet, mediaId) {
-  return projet.clips.filter((c) => c.mediaId === mediaId).length;
+  return projet.clips.filter((c) => c.mediaId === mediaId).length +
+         projet.calques.filter((c) => c.mediaId === mediaId).length;
 }
 
 

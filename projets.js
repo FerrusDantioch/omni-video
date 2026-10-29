@@ -38,6 +38,8 @@ const Projets = {
       if (v) morceaux.push(v + (v > 1 ? ' vidéos' : ' vidéo'));
       if (i) morceaux.push(i + (i > 1 ? ' images' : ' image'));
       if (a) morceaux.push(a + (a > 1 ? ' musiques' : ' musique'));
+      const duree = p.clips.reduce((total, c) => total + (c.fin - c.debut), 0);
+      if (duree > 0) morceaux.push('durée ' + dureeEnMots(duree));
       return '<li class="carte projet-carte">' +
         '<h3 class="projet-nom">' + proteger(p.nom) + '</h3>' +
         '<p class="projet-resume">' + proteger(morceaux.join(' · ')) + '<br>Modifié ' + proteger(dateEnMots(p.modifie)) + '</p>' +
@@ -86,13 +88,15 @@ const Projets = {
     this.courant = projet;
     await Medias.chargerFichiersLegers(projet);
     allerA('projet');
+    Chronologie.ouvrir(projet);
   },
 
   /* Appelé quand on quitte l'écran du projet */
   fermer() {
     if (!this.courant) return;
     this.enregistrerMaintenant();
-    Apercu.vider();
+    Visionneuse.fermer();
+    Lecteur.vider();
     this.courant = null;
   },
 
@@ -203,9 +207,9 @@ const Projets = {
 
   afficherMedias() {
     const projet = this.courant;
+    if (!projet) return;
     const medias = projet.medias.slice().sort((a, b) => ORDRE_TYPES[a.type] - ORDRE_TYPES[b.type]);
-    const actif = Apercu.media && Apercu.media.id;
-    $('#liste-medias').innerHTML = medias.map((m) => carteMedia(m, m.id === actif)).join('');
+    $('#liste-medias').innerHTML = medias.map((m) => carteMedia(m, utilisations(projet, m.id))).join('');
     $('#medias-vide').hidden = medias.length > 0;
   },
 
@@ -229,6 +233,7 @@ const Projets = {
     $$('[data-action="importer"]').forEach((b) => { b.disabled = true; });
     const etat = $('#import-etat');
     etat.hidden = false;
+    const dejaLa = new Set(projet.medias.map((m) => m.id));
     let bilan;
     try {
       bilan = await Medias.importer(projet, type, fichiers, (texte) => ecrireTexte(etat, texte));
@@ -237,27 +242,52 @@ const Projets = {
       $$('[data-action="importer"]').forEach((b) => { b.disabled = false; });
       etat.hidden = true;
     }
+    if (projet !== this.courant) { Base.enregistrerProjet(projet).catch(() => {}); return; }
+
+    // Premières vidéos d'un projet vide : on les place tout de suite dans
+    // la chronologie, dans l'ordre choisi (c'est presque toujours ce qu'on veut)
+    let placees = 0;
+    if (type === 'video' && projet.clips.length === 0) {
+      const nouvelles = projet.medias.filter((m) => !dejaLa.has(m.id) && m.type === 'video' && !m.probleme && Medias.disponible(m));
+      nouvelles.forEach((m) => {
+        projet.clips.push(nettoyerClip({ id: nouvelId(), mediaId: m.id, debut: 0, fin: m.duree }, projet.medias));
+      });
+      placees = nouvelles.length;
+    }
     this.modifie();
-    if (projet !== this.courant) return;
     this.afficherProjet();
+    if (placees) {
+      Lecteur.calculer(projet);
+      Chronologie.pps = Chronologie._zoomPourTout(Lecteur.duree());
+      Chronologie.dessiner();
+      Lecteur.aller(0);
+    } else {
+      this.rafraichirMontage();
+    }
     // Demande à la tablette de ne pas effacer nos données (une fois suffit)
     Persistance.demander();
 
     // Le bilan, en mots simples
     const mots = { video: ['vidéo ajoutée', 'vidéos ajoutées'], image: ['image ajoutée', 'images ajoutées'], audio: ['musique ajoutée', 'musiques ajoutées'] }[type];
     if (bilan.refus.length === 0) {
-      Message.montrer(bilan.ajoutes + ' ' + mots[bilan.ajoutes > 1 ? 1 : 0] + ' ✓');
+      Message.montrer(bilan.ajoutes + ' ' + mots[bilan.ajoutes > 1 ? 1 : 0] + ' ✓' +
+        (placees ? (placees > 1 ? ' Elles sont placées dans la chronologie.' : ' Elle est placée dans la chronologie.') : ''));
     } else {
       const premier = bilan.refus[0];
       Message.probleme((bilan.ajoutes ? bilan.ajoutes + ' ' + mots[bilan.ajoutes > 1 ? 1 : 0] + '. ' : '') +
         '« ' + premier.nom + ' » : ' + premier.raison +
         (bilan.refus.length > 1 ? ' (et ' + (bilan.refus.length - 1) + ' autre' + (bilan.refus.length > 2 ? 's' : '') + ')' : ''));
     }
-    // Première vidéo du projet : on la montre tout de suite
-    if (!Apercu.media) {
-      const premiere = projet.medias.find((m) => m.type === 'video' && !m.probleme && Medias.disponible(m));
-      if (premiere) { Apercu.montrer(premiere); this.afficherMedias(); }
-    }
+  },
+
+  /* Après un changement des fichiers (vidéo retrouvée, retirée…) :
+     l'aperçu et la chronologie se remettent à jour, sans bouger la ligne. */
+  rafraichirMontage() {
+    if (!this.courant) return;
+    Lecteur.pause();
+    Lecteur.calculer(this.courant);
+    Chronologie.dessiner();
+    Lecteur.aller(Lecteur.t);
   },
 
   retrouverVideos() {
@@ -276,39 +306,58 @@ const Projets = {
         Message.probleme('Aucune de ces vidéos ne fait partie du projet. Choisis exactement les vidéos utilisées (même nom de fichier).');
       }
       this.afficherProjet();
-      if (Apercu.media) Apercu.montrer(Apercu.media);
+      this.rafraichirMontage();
     };
     champ.click();
   },
 
+  media(id) {
+    return this.courant ? this.courant.medias.find((m) => m.id === id) || null : null;
+  },
+
   voirMedia(id) {
-    const media = this.courant && this.courant.medias.find((m) => m.id === id);
+    const media = this.media(id);
+    if (media) Visionneuse.ouvrir(media);
+  },
+
+  ajouterAuMontage(id) {
+    const media = this.media(id);
     if (!media) return;
-    Apercu.montrer(media);
-    this.afficherMedias();
-    // Sur une tablette tenue en portrait, l'aperçu est au-dessus : on y remonte
-    $('#cadre-apercu').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    Chronologie.ajouter(media);
+    Message.montrer((media.type === 'image' ? 'Image ajoutée' : 'Vidéo ajoutée') + ' à la fin de la chronologie ✓');
   },
 
   retirerMedia(id, bouton) {
-    armerBouton(bouton, 'Retirer du projet ?', async () => {
-      const projet = this.courant;
-      if (!projet) return;
-      if (Apercu.media && Apercu.media.id === id) Apercu.vider();
+    const projet = this.courant;
+    if (!projet) return;
+    const n = utilisations(projet, id);
+    const question = n ? 'Retirer, et ses ' + (n > 1 ? n + ' clips' : 'son clip') + ' ?' : 'Retirer du projet ?';
+    armerBouton(bouton, question, async () => {
+      if (projet !== this.courant) return;
+      if (Visionneuse.media && Visionneuse.media.id === id) Visionneuse.fermer();
+      // Les clips de ce fichier quittent la chronologie
+      projet.clips = projet.clips.filter((c) => c.mediaId !== id);
       await Medias.retirer(projet, id);
       this.modifie();
       this.afficherProjet();
+      this.rafraichirMontage();
+      Chronologie.majBoutonsHistorique();
       Message.montrer('Fichier retiré du projet. Il est toujours dans la tablette.');
     });
   }
 };
 
+/* Combien de fois un fichier est-il utilisé dans la chronologie ? */
+function utilisations(projet, mediaId) {
+  return projet.clips.filter((c) => c.mediaId === mediaId).length;
+}
+
 
 /* ---------- La carte d'un fichier dans « Mes fichiers » ---------- */
-function carteMedia(m, actif) {
+function carteMedia(m, utilise) {
   const disponible = Medias.disponible(m);
   const classes = ['media'];
-  if (actif) classes.push('actif');
+  if (utilise) classes.push('utilise');
   if (m.probleme) classes.push('illisible');
   else if (!disponible) classes.push('manquant');
 
@@ -327,6 +376,7 @@ function carteMedia(m, actif) {
   }
   details.push(tailleEnTexte(m.taille));
   if (m.type === 'video' && !m.probleme) details.push(m.aSon ? 'avec son' : 'sans son');
+  if (utilise) details.push('<strong>dans la vidéo' + (utilise > 1 ? ' (' + utilise + ' fois)' : '') + '</strong>');
 
   let probleme = '';
   if (m.probleme) probleme = '<p class="media-probleme">' + proteger(m.probleme) + '</p>';
@@ -342,6 +392,10 @@ function carteMedia(m, actif) {
       '<p class="media-details">' + details.join(' · ') + '</p>' +
       probleme +
       '<div class="media-actions">' +
+        (m.type !== 'audio' && !m.probleme && disponible
+          ? '<button type="button" class="bouton bouton-principal" data-action="ajouter-au-montage" data-id="' + id + '">' +
+            '<svg class="icone" aria-hidden="true"><use href="#i-plus"/></svg>Ajouter à la vidéo</button>'
+          : '') +
         '<button type="button" class="bouton" data-action="voir-media" data-id="' + id + '">' +
           '<svg class="icone" aria-hidden="true"><use href="#i-lecture"/></svg>Voir</button>' +
         '<button type="button" class="bouton bouton-discret" data-action="retirer-media" data-id="' + id + '">' +

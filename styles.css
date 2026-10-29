@@ -79,6 +79,7 @@
      pour qu'on voie bien où appuyer, sans trait éblouissant. */
   --bord-bouton: color-mix(in srgb, var(--discret) 45%, var(--fond));
   --duree: 400ms;           /* toutes les transitions, volontairement lentes */
+  --hauteur-apercu: 42vh;   /* hauteur du cadre d'aperçu du montage */
 
   color-scheme: dark;
 }
@@ -398,7 +399,8 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   --ratio-h: 9;
   position: relative;
   aspect-ratio: var(--ratio-l) / var(--ratio-h);
-  height: min(58vh, 100cqw * var(--ratio-h) / var(--ratio-l));
+  /* Assez petit pour laisser la place à la chronologie en dessous */
+  height: min(var(--hauteur-apercu), 100cqw * var(--ratio-h) / var(--ratio-l));
   max-width: 100%;
   justify-self: center;
   overflow: hidden;
@@ -409,6 +411,11 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   border-radius: 8px;
 }
 .cadre-apercu[data-format="9:16"] { --ratio-l: 9; --ratio-h: 16; }
+/* Les deux lecteurs du montage sont superposés ; seul celui qui porte la
+   classe « montre » est visible. L'autre reste transparent (et non caché),
+   pour que la tablette prépare déjà son image. */
+.cadre-apercu video { opacity: 0; }
+.cadre-apercu video.montre { opacity: 1; z-index: 1; }
 .cadre-apercu video,
 .cadre-apercu img {
   position: absolute;
@@ -432,8 +439,17 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   text-align: center;
   color: var(--discret);
   background: var(--fond);
+  z-index: 2;
 }
 .apercu-message .icone { width: 48px; height: 48px; color: var(--accent); }
+
+/* Commandes de l'aperçu du montage : une seule rangée de gros boutons */
+.commandes-montage { display: grid; grid-template-columns: 1fr 1fr 2fr 1fr 1fr; gap: 8px; }
+.commandes-montage .bouton { padding: 8px 4px; font-family: var(--f-chiffres); font-size: 1rem; }
+.commandes-montage .bouton-principal { font-family: var(--f-titre); }
+.temps-montage { text-align: center; font-size: 1.15rem; }
+.temps-montage .mono { font-weight: 700; }
+.discret { color: var(--discret); }
 
 /* Commandes de lecture : de gros boutons, la barre de temps en dessous */
 .commandes-lecture { display: grid; gap: 10px; }
@@ -492,7 +508,8 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
   border: var(--carte-bord);
   border-radius: 12px;
 }
-.media.actif { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.media.utilise { border-left: 4px solid var(--accent); }
+.media-details strong { color: var(--halo); font-weight: 600; }
 .media.manquant, .media.illisible { border-style: dashed; }
 
 /* Bouton « voir » = la miniature elle-même, grande cible tactile */
@@ -539,6 +556,150 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
   letter-spacing: 0.04em;
   color: var(--texte);
 }
+
+
+/* En paysage, « Mes fichiers » a sa propre barre de défilement, à la
+   hauteur de l'aperçu : la chronologie reste visible en dessous. */
+@media (orientation: landscape) and (min-width: 900px) {
+  .panneau { max-height: calc(var(--hauteur-apercu) + 130px); overflow-y: auto; padding-right: 4px; }
+}
+/* Tablette peu haute (en paysage) : tout se resserre un peu pour que
+   l'aperçu ET la chronologie tiennent dans l'écran. */
+@media (orientation: landscape) and (max-height: 860px) {
+  :root { --hauteur-apercu: 36vh; }
+  .barre { margin-bottom: 10px; }
+  .chronologie { margin-top: 12px; padding: 10px 12px; gap: 8px; }
+  .chrono-aide { display: none; }
+  .temps-montage { font-size: 1rem; }
+  .zone-apercu { gap: 8px; }
+}
+
+
+/* ---------- 9 bis. La chronologie ---------- */
+
+.chronologie {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 14px;
+  background: var(--surface);
+  border: var(--carte-bord);
+  border-top: var(--carte-lisere);
+  border-radius: var(--rayon-carte);
+}
+/* ⚠️ « minmax(0, 1fr) » et « min-width: 0 » : la bande, très large,
+   ne doit jamais élargir la page (sinon elle grandirait sans fin). */
+.chronologie { grid-template-columns: minmax(0, 1fr); }
+.chronologie > * { min-width: 0; }
+.chrono-barre { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.chrono-aide { flex: 1 1 220px; }
+.chrono-boutons { display: flex; flex-wrap: wrap; gap: 8px; }
+.chrono-boutons .bouton { min-height: 52px; padding: 6px 12px; font-size: 0.95rem; }
+
+/* La bande qui défile, et la ligne violette fixe au milieu */
+.chrono-zone { position: relative; }
+.chrono-defilement {
+  overflow-x: auto;
+  overflow-y: hidden;
+  touch-action: pan-x;               /* le doigt fait glisser la bande de côté */
+  overscroll-behavior-x: contain;    /* sans faire « retour » dans Chrome */
+  scrollbar-width: thin;
+  scrollbar-color: var(--trait) transparent;
+  border-radius: 8px;
+  background: var(--fond);
+}
+.chrono-piste {
+  position: relative;
+  height: 112px;
+  /* un appui long n'ouvre pas le menu « copier / sélectionner » */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.chrono-regle { position: absolute; left: 0; right: 0; top: 0; height: 24px; }
+.chrono-repere {
+  position: absolute;
+  top: 2px;
+  padding-left: 4px;
+  border-left: 1px solid var(--trait);
+  color: var(--discret);
+  font: 0.75rem/1.2 var(--f-chiffres);
+  white-space: nowrap;
+}
+.chrono-clips { position: absolute; left: 0; right: 0; top: 28px; height: 76px; }
+.chrono-clip {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border: 2px solid var(--fond);      /* le petit espace qui sépare deux clips */
+  border-radius: 8px;
+  background-color: var(--surface-2);
+  background-repeat: repeat-x;        /* la miniature répétée tout le long du clip */
+  background-size: auto 100%;
+  background-position: left center;
+  overflow: hidden;
+  cursor: pointer;
+}
+.chrono-image { background-repeat: no-repeat; background-size: cover; }
+.chrono-manquant { opacity: 0.45; border-style: dashed; border-color: var(--or); }
+.chrono-clip.selectionne {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent), 0 0 14px color-mix(in srgb, var(--accent) 45%, transparent);
+  z-index: 1;
+}
+.chrono-clip-duree {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgb(20 17 29 / 0.85);
+  color: var(--texte);
+  font: 600 0.78rem/1.5 var(--f-chiffres);
+}
+.chrono-tete {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 4px;
+  margin-left: -2px;
+  background: var(--accent);
+  border-radius: 2px;
+  box-shadow: 0 0 10px var(--accent);
+  pointer-events: none;               /* le doigt passe « à travers » */
+  z-index: 2;
+}
+.chrono-vide {
+  position: absolute;
+  inset: 28px 16px auto;
+  padding: 10px;
+  text-align: center;
+  color: var(--discret);
+  background: var(--fond);
+  z-index: 3;
+}
+
+/* Les outils du clip encadré */
+.outils-clip { display: grid; gap: 8px; }
+.outils-titre { color: var(--discret); font-size: 0.95rem; overflow-wrap: anywhere; }
+.outils-boutons { display: flex; flex-wrap: wrap; gap: 8px; }
+.outils-boutons .bouton { flex: 1 1 150px; min-height: 56px; padding: 6px 10px; font-size: 0.95rem; }
+.outils-boutons .outil-image { flex: 0 1 90px; font-family: var(--f-chiffres); }
+
+
+/* ---------- 9 ter. Fenêtre « Voir un fichier » ---------- */
+
+dialog.fenetre-large { width: min(900px, calc(100vw - 24px)); padding: 18px; }
+.cadre-vision {
+  position: relative;
+  height: min(52vh, 520px);
+  overflow: hidden;
+  background: #000;            /* fond de la vidéo, comme sur YouTube */
+  border-radius: 8px;
+}
+.cadre-vision video,
+.cadre-vision img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 
 
 /* ---------- 10. Écran « Vérifier ma tablette » ---------- */

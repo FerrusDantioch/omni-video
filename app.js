@@ -12,7 +12,7 @@
 
 /* Numéro de version affiché dans « À propos ». À changer à chaque
    nouvelle version publiée. */
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 
 /* ---------- 1. Navigation entre les écrans ----------
    Chaque écran est une <section class="vue" data-vue="…">.
@@ -96,9 +96,31 @@ const ACTIONS = {
   'retrouver-videos': () => Projets.retrouverVideos(),
   'voir-media':       (b) => Projets.voirMedia(b.dataset.id),
   'retirer-media':    (b) => Projets.retirerMedia(b.dataset.id, b),
-  'lecture':          () => Apercu.basculerLecture(),
-  'reculer':          () => Apercu.deplacer(-5),
-  'avancer':          () => Apercu.deplacer(5)
+  'ajouter-au-montage': (b) => Projets.ajouterAuMontage(b.dataset.id),
+
+  // Fenêtre « Voir un fichier »
+  'vision-lecture':   () => Visionneuse.basculerLecture(),
+  'vision-deplacer':  (b) => Visionneuse.deplacer(Number(b.dataset.secondes)),
+  'vision-ajouter':   () => {
+    const media = Visionneuse.media;
+    Visionneuse.fermer();
+    if (media) Projets.ajouterAuMontage(media.id);
+  },
+
+  // Aperçu du montage
+  'montage-lecture':  () => Lecteur.basculer(),
+  'montage-deplacer': (b) => Chronologie.deplacer(Number(b.dataset.secondes)),
+
+  // Chronologie
+  'annuler':          () => Chronologie.annuler(),
+  'retablir':         () => Chronologie.retablir(),
+  'zoom':             (b) => Chronologie.zoomer(Number(b.dataset.sens)),
+  'couper':           () => Chronologie.couper(),
+  'enlever-avant':    () => Chronologie.enleverAvant(),
+  'enlever-apres':    () => Chronologie.enleverApres(),
+  'deplacer-clip':    (b) => Chronologie.deplacerClip(Number(b.dataset.sens)),
+  'duree-image':      (b) => Chronologie.dureeImage(Number(b.dataset.secondes)),
+  'supprimer-clip':   (b) => Chronologie.supprimerClip(b)
 };
 
 document.addEventListener('click', (evenement) => {
@@ -144,7 +166,9 @@ document.addEventListener('visibilitychange', () => {
 
 async function demarrer() {
   ecrireTexte($('#numero-version'), 'Version ' + VERSION);
-  Apercu.initialiser();
+  Visionneuse.initialiser();
+  Lecteur.initialiser();
+  Chronologie.initialiser();
 
   // L'application est prête à s'afficher
   $('#chargement').hidden = true;

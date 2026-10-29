@@ -18,7 +18,7 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
 |---|---|---|
 | 0. Fondations | Thème Omni-système, test de la tablette au démarrage, page À propos, licence, crédits | ✅ |
 | a. Import et lecture | Ajouter des vidéos, images et musiques ; miniatures ; lecture ; vidéos retrouvées à la réouverture | ✅ |
-| b. Chronologie | Couper, découper, déplacer, supprimer, assembler les clips | à venir |
+| b. Chronologie | Couper, enlever le début ou la fin, déplacer, supprimer, assembler les clips ; Annuler / Rétablir ; aperçu du montage | ✅ |
 | c. Texte et images | Titres (police, taille, couleur, position, durée), images incrustées | à venir |
 | d. Audio | Musique de fond, voix off au micro, volumes | à venir |
 | e. Transitions | Fondu, fondu enchaîné, glissement | à venir |
@@ -33,6 +33,11 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
   on rouvre un projet, l'application demande de **resélectionner les vidéos**
   (toutes d'un coup) et les reconnaît toute seule. Les images et les musiques,
   plus légères, sont gardées par l'application.
+- **La chronologie** : la ligne violette reste au milieu, c'est la bande qui
+  glisse sous le doigt. Les outils (« Couper ici », « Enlever avant la
+  ligne », « Enlever après la ligne », « Plus tôt », « Plus tard »,
+  « Supprimer le clip ») s'appliquent au clip encadré en violet, celui qui est
+  sous la ligne. Toute modification peut être annulée.
 - **Le test de la tablette** (bouton « Vérifier ma tablette ») indique ce qui
   fonctionne : lecture des vidéos, fabrication du MP4, place disponible,
   mémoire, micro…
@@ -52,7 +57,9 @@ pouvoir les envoyer depuis un téléphone ou une tablette.
 | `stockage.js` | L'enregistrement des projets dans la tablette (IndexedDB) |
 | `capacites.js` | Le test de la tablette (« Vérifier ma tablette ») |
 | `medias.js` | L'import et l'analyse des vidéos, images et musiques |
-| `apercu.js` | Le cadre d'aperçu et ses boutons de lecture |
+| `visionneuse.js` | La fenêtre « Voir un fichier » (lecture d'une vidéo, d'une image ou d'une musique) |
+| `lecteur.js` | L'aperçu du montage : joue les clips les uns après les autres |
+| `chronologie.js` | La chronologie : la bande des clips, la ligne violette, les outils, Annuler / Rétablir |
 | `projets.js` | La liste des projets, la sauvegarde automatique, l'écran du projet |
 | `mediabunny.min.js` | La bibliothèque vidéo Mediabunny (ne pas modifier) |
 | `logo.svg` | Le logo : le dé à vingt faces de l'Omni-système |

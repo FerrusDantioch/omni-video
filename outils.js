@@ -49,6 +49,13 @@ function formaterDuree(totalSecondes) {
   return m + ':' + deuxChiffres(sec);
 }
 
+/* Position précise, avec les dixièmes de seconde (pour couper au bon
+   endroit) : 83,4 → « 1:23,4 ». En français, on sépare par une virgule. */
+function formaterPosition(secondes) {
+  const dixiemes = Math.floor(Math.max(0, secondes || 0) * 10 + 1e-6);
+  return formaterDuree(Math.floor(dixiemes / 10)) + ',' + (dixiemes % 10);
+}
+
 /* Durée en toutes lettres, pour les lecteurs d'écran et les résumés :
    90 → « 1 min 30 s ». */
 function dureeEnMots(totalSecondes) {

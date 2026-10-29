@@ -138,6 +138,11 @@ function nettoyerProjet(brut) {
   if (!brut || typeof brut !== 'object' || typeof brut.id !== 'string') return null;
   const texte = (v, defaut) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 200) : defaut);
   const nombre = (v, defaut) => (Number.isFinite(v) ? v : defaut);
+  const medias = Array.isArray(brut.medias) ? brut.medias.map(nettoyerMedia).filter(Boolean) : [];
+  // Un clip dont le fichier a disparu du projet est oublié
+  const clips = Array.isArray(brut.clips)
+    ? brut.clips.map((c) => nettoyerClip(c, medias)).filter(Boolean)
+    : [];
   return {
     id: brut.id,
     version: 1,
@@ -146,7 +151,34 @@ function nettoyerProjet(brut) {
     ajustement: AJUSTEMENTS.includes(brut.ajustement) ? brut.ajustement : 'contenir',
     cree: nombre(brut.cree, Date.now()),
     modifie: nombre(brut.modifie, Date.now()),
-    medias: Array.isArray(brut.medias) ? brut.medias.map(nettoyerMedia).filter(Boolean) : []
+    medias,
+    clips
+  };
+}
+
+/* Un clip : un morceau d'une vidéo (ou une image) placé dans la
+   chronologie. Les clips sont joués les uns après les autres, dans
+   l'ordre de la liste.
+   - debut / fin : le morceau gardé, en secondes, dans le fichier
+     d'origine (pour une image : 0 et la durée d'affichage).
+   - volume : 1 = volume normal, 0 = muet. */
+const DUREE_IMAGE_DEFAUT = 5;   // secondes d'affichage d'une image ajoutée
+const DUREE_IMAGE_MAX = 600;
+const DUREE_CLIP_MIN = 0.1;     // un clip ne peut pas être plus court
+
+function nettoyerClip(brut, medias) {
+  if (!brut || typeof brut !== 'object' || typeof brut.id !== 'string') return null;
+  const media = medias.find((m) => m.id === brut.mediaId);
+  if (!media || media.type === 'audio') return null;
+  const limite = media.type === 'video' && media.duree > 0 ? media.duree : DUREE_IMAGE_MAX;
+  const debut = borner(Number.isFinite(brut.debut) ? brut.debut : 0, 0, Math.max(0, limite - DUREE_CLIP_MIN));
+  const fin = borner(Number.isFinite(brut.fin) ? brut.fin : limite, debut + DUREE_CLIP_MIN, limite);
+  return {
+    id: brut.id,
+    mediaId: media.id,
+    debut,
+    fin,
+    volume: borner(Number.isFinite(brut.volume) ? brut.volume : 1, 0, 1)
   };
 }
 

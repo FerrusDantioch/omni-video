@@ -11,7 +11,7 @@ Vérifier ma tablette, À propos.
 
 ## Construction par étapes
 
-0 fondations ✅ · a import et lecture ✅ · b chronologie · c texte et images ·
+0 fondations ✅ · a import et lecture ✅ · b chronologie ✅ · c texte et images ·
 d audio · e transitions · f sous-titres · g export MP4 · h hors ligne et
 installation. Après chaque étape : expliquer comment tester sur la tablette.
 À la fin : ajouter Omni-Vidéo au portfolio (`omni-systeme/index.html` et son
@@ -49,8 +49,16 @@ README), dans le groupe « Création de contenu ».
 - Les vidéos sont lues par Mediabunny avec `BlobSource` (lecture par
   morceaux) ; chaque `Input` est fermé par `dispose()` après usage.
 - Les `VideoFrame` / `VideoSample` doivent toujours être fermés (`close()`).
-- L'aperçu utilise `<video>` avec une adresse `blob:` (lecture en flux par le
-  navigateur) ; `Apercu.arreter()` lâche le fichier.
+- L'aperçu du montage (`lecteur.js`) utilise deux `<video>` qui se relaient
+  (adresses `blob:`, lecture en flux par le navigateur) : l'un joue, l'autre
+  prépare le clip suivant. Le lecteur caché reste transparent (classe
+  `montre`), pas `display:none`, pour que son image soit prête. `Lecteur.vider()`
+  et `Visionneuse.arreter()` lâchent les fichiers.
+- La chronologie (`chronologie.js`) : marge d'une demi-largeur au début et à
+  la fin, donc `scrollLeft = t × pps`. ⚠️ `.chronologie` garde
+  `grid-template-columns: minmax(0, 1fr)` et `min-width: 0`, sinon la bande
+  élargit la page sans fin (boucle avec le ResizeObserver).
+- Mesuré : import d'une vidéo de 30 min (915 Mo) en 0,4 s, 18 Mo de mémoire JS.
 - La vidéo finale (étape g) sera écrite petit à petit dans le disque privé du
   navigateur (OPFS) avec `StreamTarget`, jamais dans un `BufferTarget`.
 
@@ -63,6 +71,9 @@ README), dans le groupe « Création de contenu ».
   réouverture, `Medias.retrouver()` reconnaît les fichiers resélectionnés par
   nom + taille (ou taille seule si elle est unique).
 - `Medias.fichiers` (Map id → File/Blob) n'existe que pendant la visite.
+- `projet.clips` : `[{ id, mediaId, debut, fin, volume }]`, joués dans l'ordre ;
+  `debut`/`fin` sont des secondes DANS le fichier d'origine (image : 0 → durée).
+  Annuler / Rétablir garde des copies JSON de `clips` (60 au plus).
 - ⚠️ `nettoyerProjet()` et `nettoyerMedia()` ne gardent **que** les champs
   qu'elles connaissent : tout nouveau champ doit y être ajouté.
 - Positions des éléments (textes, images…) : en fractions de l'image (0 à 1),

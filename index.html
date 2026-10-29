@@ -25,7 +25,9 @@
 <script defer src="./stockage.js"></script>
 <script defer src="./capacites.js"></script>
 <script defer src="./medias.js"></script>
-<script defer src="./apercu.js"></script>
+<script defer src="./visionneuse.js"></script>
+<script defer src="./lecteur.js"></script>
+<script defer src="./chronologie.js"></script>
 <script defer src="./projets.js"></script>
 <script defer src="./app.js"></script>
 </head>
@@ -49,6 +51,15 @@
     <symbol id="i-tablette" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M11 18h2"/></g></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></g></symbol>
     <symbol id="i-format" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="7" width="13" height="9" rx="1.5"/><rect x="17" y="4" width="5" height="16" rx="1.5"/></g></symbol>
+    <symbol id="i-ciseaux" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/></g></symbol>
+    <symbol id="i-enlever-avant" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v18"/><rect x="16" y="7" width="6" height="10" rx="1"/><path d="M3 8l7 8M10 8l-7 8"/></g></symbol>
+    <symbol id="i-enlever-apres" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v18"/><rect x="2" y="7" width="6" height="10" rx="1"/><path d="M14 8l7 8M21 8l-7 8"/></g></symbol>
+    <symbol id="i-gauche" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-droite" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-annuler" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></g></symbol>
+    <symbol id="i-retablir" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></g></symbol>
+    <symbol id="i-zoom-moins" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M7.5 10.5h6"/></g></symbol>
+    <symbol id="i-zoom-plus" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M7.5 10.5h6M10.5 7.5v6"/></g></symbol>
   </defs>
 </svg>
 
@@ -129,35 +140,28 @@
   </div>
 
   <div class="espace-projet">
-    <!-- Aperçu et lecture -->
+    <!-- Aperçu du montage : deux lecteurs vidéo qui se relaient (voir lecteur.js) -->
     <div class="zone-apercu">
       <div class="cadre-apercu" id="cadre-apercu" data-format="16:9">
-        <video id="apercu-video" playsinline preload="metadata" hidden></video>
-        <img id="apercu-image" alt="" hidden>
-        <div class="apercu-message" id="apercu-message">
+        <video id="montage-video-a" playsinline preload="auto"></video>
+        <video id="montage-video-b" playsinline preload="auto"></video>
+        <img id="montage-image" alt="" hidden>
+        <div class="apercu-message" id="montage-message">
           <svg class="icone" aria-hidden="true"><use href="#i-video"/></svg>
-          <p id="apercu-message-texte">Ajoute une vidéo, puis touche sa miniature pour la voir ici.</p>
+          <p id="montage-message-texte"></p>
         </div>
       </div>
 
-      <div class="commandes-lecture" id="commandes-lecture">
-        <input type="range" id="barre-temps" min="0" max="1000" step="1" value="0" aria-label="Position dans la vidéo" disabled>
-        <div class="temps-lecture">
-          <span>Position : <span class="mono" id="temps-actuel">0:00</span></span>
-          <span>Durée : <span class="mono" id="temps-total">0:00</span></span>
-        </div>
-        <div class="boutons-lecture">
-          <button type="button" class="bouton" data-action="reculer" disabled>
-            <svg class="icone" aria-hidden="true"><use href="#i-recul"/></svg>5 s
-          </button>
-          <button type="button" class="bouton bouton-principal" data-action="lecture" id="bouton-lecture" disabled>
-            <svg class="icone" aria-hidden="true"><use href="#i-lecture"/></svg><span>Lecture</span>
-          </button>
-          <button type="button" class="bouton" data-action="avancer" disabled>
-            5 s<svg class="icone" aria-hidden="true"><use href="#i-avance"/></svg>
-          </button>
-        </div>
+      <div class="commandes-montage" id="commandes-montage">
+        <button type="button" class="bouton" data-action="montage-deplacer" data-secondes="-5" aria-label="Reculer de 5 secondes">−5 s</button>
+        <button type="button" class="bouton" data-action="montage-deplacer" data-secondes="-0.1" aria-label="Reculer d'un dixième de seconde">−0,1</button>
+        <button type="button" class="bouton bouton-principal" data-action="montage-lecture" id="montage-lecture">
+          <svg class="icone" aria-hidden="true"><use href="#i-lecture"/></svg><span>Lecture</span>
+        </button>
+        <button type="button" class="bouton" data-action="montage-deplacer" data-secondes="0.1" aria-label="Avancer d'un dixième de seconde">+0,1</button>
+        <button type="button" class="bouton" data-action="montage-deplacer" data-secondes="5" aria-label="Avancer de 5 secondes">+5 s</button>
       </div>
+      <p class="temps-montage"><span class="mono" id="montage-temps">0:00,0</span> <span class="discret">sur</span> <span class="mono" id="montage-duree">0:00</span></p>
     </div>
 
     <!-- Mes fichiers : vidéos, images, musiques -->
@@ -180,6 +184,68 @@
          elles restent sur la tablette, rien n'est envoyé sur Internet.</p>
     </div>
   </div>
+
+  <!-- La chronologie : les clips de la vidéo, les uns après les autres.
+       La ligne violette (au milieu) montre la position ; on fait glisser
+       la bande pour la déplacer. Voir chronologie.js. -->
+  <section class="chronologie" aria-labelledby="titre-chronologie">
+    <div class="chrono-barre">
+      <h2 id="titre-chronologie">Chronologie</h2>
+      <p class="aide chrono-aide">Fais glisser la bande pour placer la ligne violette.</p>
+      <div class="chrono-boutons">
+        <button type="button" class="bouton" data-action="annuler" id="bouton-annuler" disabled>
+          <svg class="icone" aria-hidden="true"><use href="#i-annuler"/></svg>Annuler
+        </button>
+        <button type="button" class="bouton" data-action="retablir" id="bouton-retablir" disabled>
+          <svg class="icone" aria-hidden="true"><use href="#i-retablir"/></svg>Rétablir
+        </button>
+        <button type="button" class="bouton" data-action="zoom" data-sens="-1" aria-label="Voir plus de la vidéo (zoom arrière)">
+          <svg class="icone" aria-hidden="true"><use href="#i-zoom-moins"/></svg>Zoom −
+        </button>
+        <button type="button" class="bouton" data-action="zoom" data-sens="1" aria-label="Voir plus en détail (zoom avant)">
+          <svg class="icone" aria-hidden="true"><use href="#i-zoom-plus"/></svg>Zoom +
+        </button>
+      </div>
+    </div>
+
+    <div class="chrono-zone">
+      <div class="chrono-defilement" id="chrono-defilement">
+        <div class="chrono-piste" id="chrono-piste">
+          <div class="chrono-regle" id="chrono-regle" aria-hidden="true"></div>
+          <div class="chrono-clips" id="chrono-clips"></div>
+        </div>
+      </div>
+      <div class="chrono-tete" aria-hidden="true"></div>
+      <p class="chrono-vide" id="chronologie-vide">La chronologie est vide. Touche « Ajouter à la vidéo » sur une vidéo ou une image de « Mes fichiers ».</p>
+    </div>
+
+    <!-- Outils du clip encadré en violet (celui qui est sous la ligne) -->
+    <div class="outils-clip" id="outils-clip">
+      <p class="outils-titre" id="outils-titre"></p>
+      <div class="outils-boutons">
+        <button type="button" class="bouton" data-action="couper">
+          <svg class="icone" aria-hidden="true"><use href="#i-ciseaux"/></svg>Couper ici
+        </button>
+        <button type="button" class="bouton" data-action="enlever-avant">
+          <svg class="icone" aria-hidden="true"><use href="#i-enlever-avant"/></svg>Enlever avant la ligne
+        </button>
+        <button type="button" class="bouton" data-action="enlever-apres">
+          <svg class="icone" aria-hidden="true"><use href="#i-enlever-apres"/></svg>Enlever après la ligne
+        </button>
+        <button type="button" class="bouton" data-action="deplacer-clip" data-sens="-1">
+          <svg class="icone" aria-hidden="true"><use href="#i-gauche"/></svg>Plus tôt
+        </button>
+        <button type="button" class="bouton" data-action="deplacer-clip" data-sens="1">
+          Plus tard<svg class="icone" aria-hidden="true"><use href="#i-droite"/></svg>
+        </button>
+        <button type="button" class="bouton outil-image" data-action="duree-image" data-secondes="-1" aria-label="Montrer l'image 1 seconde de moins">−1 s</button>
+        <button type="button" class="bouton outil-image" data-action="duree-image" data-secondes="1" aria-label="Montrer l'image 1 seconde de plus">+1 s</button>
+        <button type="button" class="bouton" data-action="supprimer-clip">
+          <svg class="icone" aria-hidden="true"><use href="#i-poubelle"/></svg>Supprimer le clip
+        </button>
+      </div>
+    </div>
+  </section>
 
   <!-- Sélecteurs de fichiers de la tablette (invisibles, ouverts par les boutons) -->
   <input type="file" id="choisir-video" accept="video/*" multiple hidden>
@@ -382,6 +448,45 @@
     <div class="rangee-2">
       <button type="submit" class="bouton" value="annuler">Annuler</button>
       <button type="submit" class="bouton bouton-principal" value="ok">Valider</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Voir un fichier de « Mes fichiers » (voir visionneuse.js) -->
+<dialog id="fenetre-fichier" class="fenetre-large" aria-labelledby="titre-fichier">
+  <form method="dialog">
+    <h2 id="titre-fichier">Fichier</h2>
+    <div class="cadre-vision">
+      <video id="vision-video" playsinline preload="metadata" hidden></video>
+      <img id="vision-image" alt="" hidden>
+      <div class="apercu-message" id="vision-message" hidden>
+        <svg class="icone" aria-hidden="true"><use href="#i-video"/></svg>
+        <p id="vision-message-texte"></p>
+      </div>
+    </div>
+    <div class="commandes-lecture" id="vision-commandes">
+      <input type="range" id="vision-barre" min="0" max="1000" step="1" value="0" aria-label="Position dans le fichier">
+      <div class="temps-lecture">
+        <span>Position : <span class="mono" id="vision-temps">0:00</span></span>
+        <span>Durée : <span class="mono" id="vision-duree">0:00</span></span>
+      </div>
+      <div class="boutons-lecture">
+        <button type="button" class="bouton" data-action="vision-deplacer" data-secondes="-5">
+          <svg class="icone" aria-hidden="true"><use href="#i-recul"/></svg>5 s
+        </button>
+        <button type="button" class="bouton bouton-principal" data-action="vision-lecture" id="vision-lecture">
+          <svg class="icone" aria-hidden="true"><use href="#i-lecture"/></svg><span>Lecture</span>
+        </button>
+        <button type="button" class="bouton" data-action="vision-deplacer" data-secondes="5">
+          5 s<svg class="icone" aria-hidden="true"><use href="#i-avance"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="rangee-2">
+      <button type="submit" class="bouton" value="fermer">Fermer</button>
+      <button type="button" class="bouton bouton-principal" data-action="vision-ajouter" id="vision-ajouter">
+        <svg class="icone" aria-hidden="true"><use href="#i-plus"/></svg>Ajouter à la vidéo
+      </button>
     </div>
   </form>
 </dialog>

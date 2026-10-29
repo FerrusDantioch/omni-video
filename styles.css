@@ -369,6 +369,7 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 .choix label:has(input:focus-visible) { outline: 3px solid var(--halo); outline-offset: 3px; }
 .choix strong { font-family: var(--f-titre); }
 /* Petit rectangle qui montre la forme de l'image */
+.choix.choix-3 { grid-template-columns: repeat(3, 1fr); }
 .forme { display: block; border: 2px solid var(--accent); border-radius: 4px; }
 .forme-169 { width: 64px; height: 36px; }
 .forme-916 { width: 26px; height: 46px; }
@@ -411,11 +412,12 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   border-radius: 8px;
 }
 .cadre-apercu[data-format="9:16"] { --ratio-l: 9; --ratio-h: 16; }
-/* Les deux lecteurs du montage sont superposés ; seul celui qui porte la
-   classe « montre » est visible. L'autre reste transparent (et non caché),
-   pour que la tablette prépare déjà son image. */
-.cadre-apercu video { opacity: 0; }
-.cadre-apercu video.montre { opacity: 1; z-index: 1; }
+/* Les deux lecteurs vidéo et les deux images du montage sont superposés.
+   lecteur.js règle la transparence et le glissement de chacun (pendant une
+   transition, deux sont visibles à la fois). Un lecteur inutilisé reste
+   transparent (et non caché), pour que la tablette prépare déjà son image. */
+.cadre-apercu video,
+.cadre-apercu img.couche { opacity: 0; }
 .cadre-apercu video,
 .cadre-apercu img {
   position: absolute;
@@ -439,7 +441,7 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   text-align: center;
   color: var(--discret);
   background: var(--fond);
-  z-index: 2;
+  z-index: 4;   /* au-dessus des vidéos (1 et 2) et des textes (3) */
 }
 .apercu-message .icone { width: 48px; height: 48px; color: var(--accent); }
 
@@ -652,6 +654,42 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
 .chrono-calque span { pointer-events: none; }
 .chrono-clips { position: absolute; left: 0; right: 0; top: calc(26px + var(--h-calques)); height: 76px; }
 
+/* Les pastilles des transitions, posées sur la ligne des clips. Le
+   conteneur laisse passer le doigt ; seules les pastilles l'attrapent. */
+.chrono-transitions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(26px + var(--h-calques));
+  height: 76px;
+  pointer-events: none;
+  z-index: 2;
+}
+.chrono-transition {
+  position: absolute;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 2px solid var(--bord-bouton);
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--discret);
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: pan-x;
+}
+.chrono-transition .icone { width: 22px; height: 22px; }
+.chrono-transition.active {
+  border-color: var(--halo);
+  background: var(--accent);
+  color: var(--accent-texte);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
 /* La ligne de la musique et des voix off, sous les clips */
 .chrono-pistes { position: absolute; left: 0; right: 0; top: calc(26px + var(--h-calques) + 80px); height: var(--h-pistes); }
 .chrono-piste-audio {
@@ -739,7 +777,7 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
 
 /* La toile des textes et images, posée sur la vidéo de l'aperçu.
    « touch-action: none » : faire glisser un texte ne fait pas défiler la page. */
-.toile-calques { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; touch-action: none; }
+.toile-calques { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; touch-action: none; }
 
 
 /* ---------- 9 ter. Onglets du panneau de droite ---------- */

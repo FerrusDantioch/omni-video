@@ -26,6 +26,7 @@
 <script defer src="./capacites.js"></script>
 <script defer src="./medias.js"></script>
 <script defer src="./visionneuse.js"></script>
+<script defer src="./transitions.js"></script>
 <script defer src="./lecteur.js"></script>
 <script defer src="./rendu.js"></script>
 <script defer src="./chronologie.js"></script>
@@ -54,6 +55,7 @@
     <symbol id="i-tablette" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M11 18h2"/></g></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></g></symbol>
     <symbol id="i-format" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="7" width="13" height="9" rx="1.5"/><rect x="17" y="4" width="5" height="16" rx="1.5"/></g></symbol>
+    <symbol id="i-transition" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="6" width="11" height="12" rx="2"/><rect x="11" y="6" width="11" height="12" rx="2" stroke-dasharray="3 2"/></g></symbol>
     <symbol id="i-micro" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></g></symbol>
     <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol>
     <symbol id="i-muet" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l4 6M21 9l-4 6"/></g></symbol>
@@ -153,7 +155,8 @@
       <div class="cadre-apercu" id="cadre-apercu" data-format="16:9">
         <video id="montage-video-a" playsinline preload="auto"></video>
         <video id="montage-video-b" playsinline preload="auto"></video>
-        <img id="montage-image" alt="" hidden>
+        <img class="couche" id="montage-image-a" alt="">
+        <img class="couche" id="montage-image-b" alt="">
         <!-- Les textes et images incrustées, dessinés par-dessus (rendu.js) -->
         <canvas class="toile-calques" id="montage-calques" aria-hidden="true"></canvas>
         <div class="apercu-message" id="montage-message">
@@ -375,6 +378,8 @@
           <!-- Les textes et images incrustées, au-dessus des clips -->
           <div class="chrono-calques" id="chrono-calques"></div>
           <div class="chrono-clips" id="chrono-clips"></div>
+          <!-- Les pastilles des transitions, entre les clips (et au début, à la fin) -->
+          <div class="chrono-transitions" id="chrono-transitions"></div>
           <!-- La musique de fond et les voix off, sous les clips -->
           <div class="chrono-pistes" id="chrono-pistes"></div>
         </div>
@@ -401,6 +406,9 @@
         </button>
         <button type="button" class="bouton" data-action="deplacer-clip" data-sens="1">
           Plus tard<svg class="icone" aria-hidden="true"><use href="#i-droite"/></svg>
+        </button>
+        <button type="button" class="bouton" data-action="transition-clip">
+          <svg class="icone" aria-hidden="true"><use href="#i-transition"/></svg>Transition avant ce clip
         </button>
         <button type="button" class="bouton outil-image" data-action="duree-image" data-secondes="-1" aria-label="Montrer l'image 1 seconde de moins">−1 s</button>
         <button type="button" class="bouton outil-image" data-action="duree-image" data-secondes="1" aria-label="Montrer l'image 1 seconde de plus">+1 s</button>
@@ -618,6 +626,51 @@
         <small>Pas de bandes, mais les bords de l'image sont coupés</small>
       </label>
     </fieldset>
+    <div class="rangee-2">
+      <button type="submit" class="bouton" value="annuler">Annuler</button>
+      <button type="submit" class="bouton bouton-principal" value="ok">Valider</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Choisir une transition (voir chronologie.js et transitions.js) -->
+<dialog id="fenetre-transition" aria-labelledby="titre-transition">
+  <form method="dialog">
+    <h2 id="titre-transition">Transition</h2>
+    <p class="aide" id="transition-explication"></p>
+    <fieldset class="choix">
+      <legend>Effet</legend>
+      <label>
+        <input type="radio" name="type" value="aucune">
+        <strong>Aucune</strong>
+        <small>Coupe nette, d'un clip à l'autre</small>
+      </label>
+      <label>
+        <input type="radio" name="type" value="fondu">
+        <strong>Fondu au noir</strong>
+        <small>L'image s'assombrit, puis la suivante apparaît</small>
+      </label>
+      <label class="transition-entre-clips">
+        <input type="radio" name="type" value="enchaine">
+        <strong>Fondu enchaîné</strong>
+        <small>Une image se fond doucement dans l'autre</small>
+      </label>
+      <label class="transition-entre-clips">
+        <input type="radio" name="type" value="glissement">
+        <strong>Glissement</strong>
+        <small>La nouvelle image arrive et pousse l'ancienne</small>
+      </label>
+    </fieldset>
+    <fieldset class="choix choix-3">
+      <legend>Durée</legend>
+      <label><input type="radio" name="duree" value="0.5"><strong>Rapide</strong><small>0,5 s</small></label>
+      <label><input type="radio" name="duree" value="1"><strong>Normale</strong><small>1 s</small></label>
+      <label><input type="radio" name="duree" value="2"><strong>Lente</strong><small>2 s</small></label>
+    </fieldset>
+    <label class="interrupteur transition-entre-clips"><input type="checkbox" name="tous">
+      Mettre la même transition entre TOUS les clips</label>
+    <p class="aide transition-entre-clips">Le fondu enchaîné et le glissement font se chevaucher les deux clips :
+       la vidéo devient un peu plus courte.</p>
     <div class="rangee-2">
       <button type="submit" class="bouton" value="annuler">Annuler</button>
       <button type="submit" class="bouton bouton-principal" value="ok">Valider</button>

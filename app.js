@@ -12,7 +12,7 @@
 
 /* Numéro de version affiché dans « À propos ». À changer à chaque
    nouvelle version publiée. */
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 
 /* ---------- 1. Navigation entre les écrans ----------
    Chaque écran est une <section class="vue" data-vue="…">.
@@ -153,7 +153,11 @@ const ACTIONS = {
   'piste-debut':          (b) => PistesAudio.commencerALaLigne(b.dataset.id),
   'piste-fin':            (b) => PistesAudio.finirALaLigne(b.dataset.id),
   'supprimer-piste':      (b) => PistesAudio.supprimer(b.dataset.id, b),
-  'couper-son-clip':      () => Chronologie.basculerSonClip()
+  'couper-son-clip':      () => Chronologie.basculerSonClip(),
+
+  // Transitions
+  'choisir-transition':   (b) => Chronologie.ouvrirTransition(b.dataset.cle),
+  'transition-clip':      () => Chronologie.transitionDuClip()
 };
 
 document.addEventListener('click', (evenement) => {

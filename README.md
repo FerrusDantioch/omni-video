@@ -21,7 +21,7 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
 | b. Chronologie | Couper, enlever le début ou la fin, déplacer, supprimer, assembler les clips ; Annuler / Rétablir ; aperçu du montage | ✅ |
 | c. Texte et images | Textes (police, taille, couleur, style, position, durée, fondu), images incrustées ; déplacement au doigt dans l'aperçu | ✅ |
 | d. Audio | Musique de fond (fondus automatiques, répétée si trop courte), voix off enregistrée au micro pendant que la vidéo défile, volume de chaque musique, voix et clip | ✅ |
-| e. Transitions | Fondu, fondu enchaîné, glissement | à venir |
+| e. Transitions | Fondu au noir, fondu enchaîné, glissement (0,5 / 1 / 2 s), entre deux clips ou partout ; fondu au début et à la fin de la vidéo | ✅ |
 | f. Sous-titres | Saisie, import .srt / .vtt, incrustation | à venir |
 | g. Export MP4 | H.264 + AAC, 16:9 ou 9:16, 720p ou 1080p, progression, annulation | à venir |
 | h. Hors ligne | Service worker, installation sur l'écran d'accueil, export / import de projet | à venir |
@@ -43,6 +43,9 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
   faire glisser du doigt dans l'aperçu, ou les toucher pour les modifier.
   Ils restent à leur moment dans la vidéo : si l'on supprime ou déplace un
   clip, il faut parfois les replacer.
+- **Les transitions** : touchez une pastille ronde entre deux clips dans la
+  chronologie (ou « Transition avant ce clip »). Le fondu enchaîné et le
+  glissement font se chevaucher les deux clips : la vidéo raccourcit un peu.
 - **Le son** (onglet « Son ») : une musique de fond se met sur toute la vidéo,
   à 30 % du volume, avec un fondu au début et à la fin. Pour la voix off, on
   place la ligne violette, on touche « Enregistrer » et on parle pendant que
@@ -67,7 +70,8 @@ pouvoir les envoyer depuis un téléphone ou une tablette.
 | `capacites.js` | Le test de la tablette (« Vérifier ma tablette ») |
 | `medias.js` | L'import et l'analyse des vidéos, images et musiques |
 | `visionneuse.js` | La fenêtre « Voir un fichier » (lecture d'une vidéo, d'une image ou d'une musique) |
-| `lecteur.js` | L'aperçu du montage : joue les clips les uns après les autres |
+| `transitions.js` | Le calcul du montage : place de chaque clip, transitions (le même pour l'aperçu et la vidéo finale) |
+| `lecteur.js` | L'aperçu du montage : joue les clips les uns après les autres, avec les transitions |
 | `chronologie.js` | La chronologie : la bande des clips, la ligne violette, les outils, Annuler / Rétablir |
 | `rendu.js` | Le dessin des textes et images incrustées (le même pour l'aperçu et pour la vidéo finale) ; polices et couleurs proposées |
 | `incrustations.js` | Les onglets, la liste et l'éditeur des textes et images incrustées, le déplacement au doigt |

@@ -12,7 +12,7 @@ Vérifier ma tablette, À propos.
 ## Construction par étapes
 
 0 fondations ✅ · a import et lecture ✅ · b chronologie ✅ · c texte et images ✅ ·
-d audio ✅ · e transitions · f sous-titres · g export MP4 · h hors ligne et
+d audio ✅ · e transitions ✅ · f sous-titres · g export MP4 · h hors ligne et
 installation. Après chaque étape : expliquer comment tester sur la tablette.
 À la fin : ajouter Omni-Vidéo au portfolio (`omni-systeme/index.html` et son
 README), dans le groupe « Création de contenu ».
@@ -87,6 +87,16 @@ README), dans le groupe « Création de contenu ».
   répétée si plus courte ; une voix ne se répète jamais). Fondus fixes
   (`FONDUS_PISTE`) : musique 1 s / 2 s, voix 0,05 s. L'export devra utiliser
   `PistesAudio.volumeA()` et `positionA()` pour sonner comme l'aperçu.
+- Transitions : `clip.transition = { type, duree }` = la transition qui MÈNE à
+  ce clip (ignorée pour le premier) ; `projet.transitionDebut` / `transitionFin`
+  (aucune ou fondu). `Montage.segments()` (transitions.js) place les clips :
+  enchaîné et glissement les font se chevaucher (durée ≤ moitié de chaque
+  clip, donc jamais plus de deux clips à la fois). `Montage.etat()` donne
+  opacité, décalage du glissement et volume : à réutiliser tel quel à l'export.
+- `lecteur.js` : 2 `<video>` + 2 `<img>` superposés ; `_attribuer()` donne un
+  élément à chacun des (au plus) deux segments utiles, `_composer()` applique
+  opacité / translateX / volume à chaque image ; le clip suivant démarre
+  pendant un chevauchement. `Lecteur.elementPrincipal()` = la vidéo en cours.
 - Les voix off sont des médias `type: 'audio', voix: true` (Blob WebM/Opus du
   MediaRecorder, dans le tiroir `fichiers`), cachés de « Mes fichiers ». Une
   voix qui n'est plus utilisée par aucune piste est effacée à la réouverture

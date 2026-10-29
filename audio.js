@@ -368,9 +368,8 @@ const Enregistreur = {
   /* Attend que la vidéo de l'aperçu avance vraiment (au plus 2 secondes) */
   _attendreLaVideo() {
     return new Promise((fin) => {
-      const seg = Lecteur.segments[Lecteur.index];
-      if (!seg || !Lecteur._estVideo(seg)) { fin(); return; }
-      const el = Lecteur.elements[Lecteur.actif];
+      const el = Lecteur.elementPrincipal();
+      if (!el) { fin(); return; }
       const depart = el.currentTime;
       const debut = Date.now();
       const verifier = () => {

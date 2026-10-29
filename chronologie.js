@@ -150,6 +150,7 @@ const Chronologie = {
 
     this.dessinerCalques();
     this.dessinerPistes();
+    this.dessinerTransitions();
     $('#chronologie-vide').hidden = Lecteur.segments.length > 0;
     this._indexAffiche = -2;
     this._placerBande(Lecteur.t);
@@ -177,6 +178,92 @@ const Chronologie = {
         'aria-label="Modifier : ' + proteger(libelle) + '">' +
         '<span>' + (c.type === 'texte' ? 'T ' : '▣ ') + proteger(libelle) + '</span></button>';
     }).join('');
+  },
+
+  /* Les pastilles des transitions : une au tout début, une entre chaque
+     paire de clips, une à la toute fin. Violette si une transition est
+     posée, discrète sinon. */
+  dessinerTransitions() {
+    const projet = Projets.courant;
+    const segs = Lecteur.segments;
+    if (!projet || !segs.length) { $('#chrono-transitions').innerHTML = ''; return; }
+    const pastille = (cle, t, transition, libelle) =>
+      '<button type="button" class="chrono-transition' + (transition && transition.type !== 'aucune' ? ' active' : '') + '" ' +
+      'data-action="choisir-transition" data-cle="' + cle + '" style="left:' + (this._marge + t * this.pps).toFixed(1) + 'px" ' +
+      'aria-label="' + libelle + ' : ' + NOMS_TRANSITIONS[transition ? transition.type : 'aucune'] + '">' +
+      '<svg class="icone" aria-hidden="true"><use href="#i-transition"/></svg></button>';
+    let html = pastille('debut', 0, projet.transitionDebut, 'Début de la vidéo');
+    for (let i = 1; i < segs.length; i++) {
+      const s = segs[i];
+      const chevauche = s.transition && s.transition.type !== 'fondu';
+      const centre = s.debut + (chevauche ? s.transition.duree / 2 : 0);
+      html += pastille(i, centre, s.transition, 'Transition entre le clip ' + i + ' et le clip ' + (i + 1));
+    }
+    html += pastille('fin', Lecteur.duree(), projet.transitionFin, 'Fin de la vidéo');
+    $('#chrono-transitions').innerHTML = html;
+  },
+
+  /* ---------- Choisir une transition ----------
+     cle : « debut », « fin », ou le numéro du clip (la transition qui
+     mène à ce clip depuis le précédent). */
+  ouvrirTransition(cle) {
+    const projet = Projets.courant;
+    if (!projet) return;
+    Lecteur.pause();
+    const bord = cle === 'debut' || cle === 'fin';
+    const i = Number(cle);
+    let actuelle;
+    if (cle === 'debut') actuelle = projet.transitionDebut;
+    else if (cle === 'fin') actuelle = projet.transitionFin;
+    else if (projet.clips[i] && i > 0) actuelle = projet.clips[i].transition;
+    else return;
+
+    const fenetre = $('#fenetre-transition');
+    const formulaire = $('form', fenetre);
+    ecrireTexte($('#titre-transition'), cle === 'debut' ? 'Début de la vidéo' : cle === 'fin' ? 'Fin de la vidéo' : 'Transition');
+    ecrireTexte($('#transition-explication'), cle === 'debut'
+      ? 'Ta vidéo peut commencer en sortant doucement du noir.'
+      : cle === 'fin' ? 'Ta vidéo peut finir en s\'assombrissant doucement jusqu\'au noir.'
+      : 'Entre le clip ' + i + ' et le clip ' + (i + 1) + '.');
+    $$('.transition-entre-clips', fenetre).forEach((el) => { el.hidden = bord; });
+    formulaire.elements.type.value = actuelle.type;
+    formulaire.elements.duree.value = String(DUREES_TRANSITION.reduce((a, b) => (Math.abs(b - actuelle.duree) < Math.abs(a - actuelle.duree) ? b : a)));
+    formulaire.elements.tous.checked = false;
+    fenetre.returnValue = '';
+    fenetre.showModal();
+
+    fenetre.onclose = () => {
+      if (fenetre.returnValue !== 'ok' || projet !== Projets.courant) return;
+      const choix = { type: formulaire.elements.type.value, duree: Number(formulaire.elements.duree.value) };
+      this._memoriser();
+      if (cle === 'debut') projet.transitionDebut = nettoyerTransition(choix, TYPES_TRANSITION_BORD);
+      else if (cle === 'fin') projet.transitionFin = nettoyerTransition(choix, TYPES_TRANSITION_BORD);
+      else if (formulaire.elements.tous.checked) projet.clips.forEach((c, j) => { if (j > 0) c.transition = nettoyerTransition(choix, TYPES_TRANSITION); });
+      else projet.clips[i].transition = nettoyerTransition(choix, TYPES_TRANSITION);
+
+      // La ligne se place juste avant la transition, pour la regarder tout de suite
+      Lecteur.calculer(projet);
+      let t = 0;
+      if (cle === 'fin') t = Math.max(0, Lecteur.duree() - 3);
+      else if (!bord) t = Math.max(0, Lecteur.segments[i].debut - 1.5);
+      this._apresModification(t);
+
+      if (choix.type === 'aucune') { Message.montrer('Transition retirée.'); return; }
+      // Des clips trop courts raccourcissent la transition : on le dit
+      const reelle = bord ? null : Lecteur.segments[i].transition;
+      if (reelle && reelle.duree < choix.duree - 0.05) {
+        Message.montrer('Transition posée ✓ Les clips sont courts : elle dure ' + String(Math.round(reelle.duree * 10) / 10).replace('.', ',') + ' s. Touche « Lecture » pour la voir.');
+      } else {
+        Message.montrer('Transition posée ✓ Touche « Lecture » pour la voir.');
+      }
+    };
+  },
+
+  /* Le bouton « Transition avant ce clip » des outils */
+  transitionDuClip() {
+    const c = this._cible();
+    if (!c) return;
+    this.ouvrirTransition(c.i === 0 ? 'debut' : c.i);
   },
 
   /* Deux calques se chevauchent-ils dans le temps ? */
@@ -288,6 +375,7 @@ const Chronologie = {
     $('[data-action="deplacer-clip"][data-sens="-1"]', zone).disabled = i <= 0 || Lecteur.enLecture;
     $('[data-action="deplacer-clip"][data-sens="1"]', zone).disabled = i >= n - 1 || Lecteur.enLecture;
     actif('supprimer-clip', true);
+    actif('transition-clip', true);
     const image = seg.media.type === 'image';
     $$('.outil-image', zone).forEach((b) => { b.hidden = !image; });
     // Le son du clip : seulement pour une vidéo qui a du son
@@ -321,7 +409,10 @@ const Chronologie = {
 
   _photo() {
     const p = Projets.courant;
-    return JSON.stringify({ clips: p.clips, calques: p.calques, pistes: p.pistes, t: Lecteur.t });
+    return JSON.stringify({
+      clips: p.clips, calques: p.calques, pistes: p.pistes,
+      transitionDebut: p.transitionDebut, transitionFin: p.transitionFin, t: Lecteur.t
+    });
   },
 
   _restaurer(photo) {
@@ -331,6 +422,8 @@ const Chronologie = {
     projet.clips = donnees.clips.map((c) => nettoyerClip(c, projet.medias)).filter(Boolean);
     projet.calques = (donnees.calques || []).map((c) => nettoyerCalque(c, projet.medias)).filter(Boolean);
     projet.pistes = (donnees.pistes || []).map((x) => nettoyerPiste(x, projet.medias)).filter(Boolean);
+    projet.transitionDebut = nettoyerTransition(donnees.transitionDebut, TYPES_TRANSITION_BORD);
+    projet.transitionFin = nettoyerTransition(donnees.transitionFin, TYPES_TRANSITION_BORD);
     this._apresModification(donnees.t);
     PistesAudio.afficherListes();
     PistesAudio.synchroniser();
@@ -402,7 +495,8 @@ const Chronologie = {
     if (!c) return;
     this._memoriser();
     const premier = Object.assign({}, c.seg.clip, { fin: c.local });
-    const second = Object.assign({}, c.seg.clip, { id: nouvelId(), debut: c.local });
+    // La seconde moitié suit directement la première : pas de transition entre elles
+    const second = Object.assign({}, c.seg.clip, { id: nouvelId(), debut: c.local, transition: nettoyerTransition(null, TYPES_TRANSITION) });
     Projets.courant.clips.splice(c.i, 1, premier, second);
     this._apresModification(Lecteur.t);
     Message.montrer('Clip coupé en deux ✓');

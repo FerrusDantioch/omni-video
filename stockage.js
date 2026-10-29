@@ -158,7 +158,10 @@ function nettoyerProjet(brut) {
       : [],
     pistes: Array.isArray(brut.pistes)
       ? brut.pistes.map((p) => nettoyerPiste(p, medias)).filter(Boolean)
-      : []
+      : [],
+    // Fondu au noir au tout début et à la toute fin de la vidéo
+    transitionDebut: nettoyerTransition(brut.transitionDebut, TYPES_TRANSITION_BORD),
+    transitionFin: nettoyerTransition(brut.transitionFin, TYPES_TRANSITION_BORD)
   };
 }
 
@@ -232,7 +235,28 @@ function nettoyerClip(brut, medias) {
     mediaId: media.id,
     debut,
     fin,
-    volume: borner(Number.isFinite(brut.volume) ? brut.volume : 1, 0, 1)
+    volume: borner(Number.isFinite(brut.volume) ? brut.volume : 1, 0, 1),
+    // La transition qui mène À ce clip depuis le précédent (ignorée pour le premier)
+    transition: nettoyerTransition(brut.transition, TYPES_TRANSITION)
+  };
+}
+
+/* Une transition : { type, duree }.
+   - aucune     : coupe nette
+   - fondu      : fondu au noir (l'image s'assombrit, puis la suivante apparaît)
+   - enchaine   : fondu enchaîné (une image se fond dans l'autre)
+   - glissement : la nouvelle image arrive par la droite et pousse l'ancienne
+   Le fondu enchaîné et le glissement font se CHEVAUCHER les deux clips :
+   la vidéo devient plus courte de la durée de la transition. */
+const TYPES_TRANSITION = ['aucune', 'fondu', 'enchaine', 'glissement'];
+const TYPES_TRANSITION_BORD = ['aucune', 'fondu'];   // tout début et toute fin de la vidéo
+const DUREES_TRANSITION = [0.5, 1, 2];
+
+function nettoyerTransition(brut, typesPermis) {
+  const t = brut && typeof brut === 'object' ? brut : {};
+  return {
+    type: typesPermis.includes(t.type) ? t.type : 'aucune',
+    duree: borner(Number.isFinite(t.duree) ? t.duree : 1, 0.3, 3)
   };
 }
 

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Omni-Vidéo">
+  <!-- =====================================================================
+       LOGO D'OMNI-VIDÉO : le dé à vingt faces de l'Omni-système
+       Dessin repris à l'identique du portfolio (omni-systeme/index.html,
+       « Essayez le dé ») : même hexagone, mêmes arêtes, même anneau lumineux.
+       Seule différence : le chiffre 20 de la face centrale est remplacé par
+       un triangle « lecture », pour reconnaître l'application vidéo.
+       Couleurs du thème Omni-système (aucun blanc pur ni noir pur).
+       ===================================================================== -->
+  <defs>
+    <!-- Fond : nuit violette, un peu plus claire au centre (comme le médaillon du portfolio) -->
+    <radialGradient id="fond" cx="50%" cy="45%" r="60%">
+      <stop offset="0" stop-color="#2b1f4d"/>
+      <stop offset="0.7" stop-color="#14111d"/>
+      <stop offset="1" stop-color="#14111d"/>
+    </radialGradient>
+    <!-- Lueur douce de l'anneau -->
+    <filter id="lueur" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+  </defs>
+
+  <!-- Fond rond sombre -->
+  <circle cx="100" cy="100" r="100" fill="url(#fond)"/>
+
+  <!-- Anneau lumineux : un trait flou (la lueur) sous un trait net -->
+  <circle cx="100" cy="100" r="88" fill="none" stroke="#a777ff" stroke-width="6" opacity="0.45" filter="url(#lueur)"/>
+  <circle cx="100" cy="100" r="88" fill="none" stroke="#d6c2ff" stroke-width="2" opacity="0.6"/>
+
+  <!-- Le dé : hexagone, puis arêtes des faces -->
+  <g transform="translate(100 100) scale(0.86) translate(-100 -100)">
+    <polygon points="100,18 171,59 171,141 100,182 29,141 29,59" fill="#2a1660" stroke="#a777ff" stroke-width="2.5" stroke-linejoin="round"/>
+    <polygon points="100,52 142,124 58,124" fill="none" stroke="#a777ff" stroke-width="1.6" opacity="0.7" stroke-linejoin="round"/>
+    <polyline points="100,18 100,52 29,59 58,124 29,141 100,182 142,124 171,141 142,124 171,59 100,52" fill="none" stroke="#a777ff" stroke-width="1.6" opacity="0.7" stroke-linejoin="round"/>
+    <polyline points="58,124 100,182" fill="none" stroke="#a777ff" stroke-width="1.6" opacity="0.7"/>
+    <!-- Triangle « lecture » au centre de la face du milieu -->
+    <polygon points="90,85 90,113 114,99" fill="#e9e4f2" stroke="#e9e4f2" stroke-width="3" stroke-linejoin="round"/>
+  </g>
+</svg>

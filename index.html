@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<!--
+  Omni-Vidéo — © 2026 Ferrus Dantioch
+  Licence : Creative Commons BY-NC-ND 4.0 (texte complet dans le fichier LICENSE)
+  https://creativecommons.org/licenses/by-nc-nd/4.0/
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Omni-Vidéo</title>
+<meta name="description" content="Omni-Vidéo — le montage vidéo tout simple pour YouTube, sur tablette. Gratuit, fonctionne hors ligne.">
+<meta name="theme-color" content="#14111d">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" href="./logo.svg" type="image/svg+xml">
+
+<link rel="stylesheet" href="./styles.css">
+
+<!-- Le code est découpé en plusieurs fichiers, chargés dans cet ordre.
+     « defer » : ils s'exécutent une fois la page entièrement lue.
+     mediabunny.min.js est la bibliothèque qui lit et fabrique les fichiers
+     vidéo (licence MPL-2.0, voir CREDITS.md) : on ne la modifie jamais. -->
+<script defer src="./mediabunny.min.js"></script>
+<script defer src="./outils.js"></script>
+<script defer src="./stockage.js"></script>
+<script defer src="./capacites.js"></script>
+<script defer src="./medias.js"></script>
+<script defer src="./apercu.js"></script>
+<script defer src="./projets.js"></script>
+<script defer src="./app.js"></script>
+</head>
+<body>
+
+<!-- Petites icônes dessinées une seule fois, réutilisées partout avec <use>.
+     Elles sont toujours accompagnées d'un texte. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-video" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-3v10l-6-3"/></g></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5-9 8"/></g></symbol>
+    <symbol id="i-musique" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></g></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-lecture" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></symbol>
+    <symbol id="i-recul" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></g></symbol>
+    <symbol id="i-avance" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></g></symbol>
+    <symbol id="i-poubelle" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></g></symbol>
+    <symbol id="i-crayon" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></g></symbol>
+    <symbol id="i-dossier" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 6h6l2 2h10v11H3z"/></g></symbol>
+    <symbol id="i-tablette" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M11 18h2"/></g></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></g></symbol>
+    <symbol id="i-format" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="7" width="13" height="9" rx="1.5"/><rect x="17" y="4" width="5" height="16" rx="1.5"/></g></symbol>
+  </defs>
+</svg>
+
+<!-- Zone invisible : ce qu'on y écrit est lu par les lecteurs d'écran -->
+<div id="annonce" class="annonce" aria-live="polite"></div>
+
+<!-- Affiché pendant le chargement. Si l'application ne démarre pas du tout
+     (navigateur trop ancien), le petit script en bas de page remplace ce
+     texte par une explication. -->
+<p class="chargement" id="chargement">Chargement d'Omni-Vidéo…</p>
+
+<main hidden id="application">
+
+<!-- ============================ ACCUEIL ============================ -->
+<section class="vue vue-etroite" data-vue="accueil" aria-labelledby="titre-accueil">
+  <header class="entete">
+    <img class="logo" src="./logo.svg" alt="" width="56" height="56">
+    <div>
+      <h1 id="titre-accueil" class="marque" tabindex="-1">Omni<span>-Vidéo</span></h1>
+      <p class="aide">Le montage vidéo tout simple, pour YouTube.</p>
+    </div>
+  </header>
+
+  <div class="pile">
+    <!-- Résumé du test de la tablette (rempli par capacites.js) -->
+    <div id="bandeau-tablette" class="bandeau" hidden>
+      <strong id="bandeau-tablette-titre"></strong>
+      <p id="bandeau-tablette-texte"></p>
+      <button type="button" class="bouton large" data-action="voir-tablette">
+        <svg class="icone" aria-hidden="true"><use href="#i-tablette"/></svg>Voir le détail
+      </button>
+    </div>
+
+    <button type="button" class="bouton bouton-principal enorme" data-action="nouveau-projet">
+      <svg class="icone" aria-hidden="true"><use href="#i-plus"/></svg>Nouveau projet
+    </button>
+
+    <h2>Mes projets</h2>
+    <ul class="liste-projets" id="liste-projets"></ul>
+    <p class="vide" id="projets-vide">Tu n'as pas encore de projet. Touche « Nouveau projet » pour commencer ta première vidéo.</p>
+  </div>
+
+  <div class="pied">
+    <button type="button" class="bouton" data-action="voir-tablette">
+      <svg class="icone" aria-hidden="true"><use href="#i-tablette"/></svg>Vérifier ma tablette
+    </button>
+    <button type="button" class="bouton" data-action="voir-apropos">
+      <svg class="icone" aria-hidden="true"><use href="#i-info"/></svg>À propos
+    </button>
+  </div>
+  <p class="signature">Réalisé par Ferrus Dantioch</p>
+</section>
+
+
+<!-- ============================ PROJET ============================ -->
+<section class="vue vue-projet" data-vue="projet" aria-labelledby="titre-projet" hidden>
+  <header class="barre">
+    <button type="button" class="bouton retour" data-action="retour">← Mes projets</button>
+    <h1 id="titre-projet" tabindex="-1">Projet</h1>
+    <span class="etat-sauvegarde" id="etat-sauvegarde" aria-live="polite"></span>
+    <button type="button" class="bouton" data-action="renommer-projet">
+      <svg class="icone" aria-hidden="true"><use href="#i-crayon"/></svg>Renommer
+    </button>
+    <button type="button" class="bouton" data-action="changer-format">
+      <svg class="icone" aria-hidden="true"><use href="#i-format"/></svg><span id="bouton-format-texte">Format</span>
+    </button>
+  </header>
+
+  <!-- Vidéos à retrouver (après une réouverture du projet) -->
+  <div id="bandeau-manquants" class="bandeau attention" hidden>
+    <strong id="manquants-titre"></strong>
+    <p>La tablette ne laisse pas une application garder l'accès à tes vidéos d'une fois sur l'autre.
+       Touche le bouton, puis choisis-les à nouveau : tu peux toutes les sélectionner d'un coup,
+       Omni-Vidéo les reconnaît toute seule.</p>
+    <button type="button" class="bouton bouton-principal large" data-action="retrouver-videos">
+      <svg class="icone" aria-hidden="true"><use href="#i-dossier"/></svg>Retrouver mes vidéos
+    </button>
+  </div>
+
+  <div class="espace-projet">
+    <!-- Aperçu et lecture -->
+    <div class="zone-apercu">
+      <div class="cadre-apercu" id="cadre-apercu" data-format="16:9">
+        <video id="apercu-video" playsinline preload="metadata" hidden></video>
+        <img id="apercu-image" alt="" hidden>
+        <div class="apercu-message" id="apercu-message">
+          <svg class="icone" aria-hidden="true"><use href="#i-video"/></svg>
+          <p id="apercu-message-texte">Ajoute une vidéo, puis touche sa miniature pour la voir ici.</p>
+        </div>
+      </div>
+
+      <div class="commandes-lecture" id="commandes-lecture">
+        <input type="range" id="barre-temps" min="0" max="1000" step="1" value="0" aria-label="Position dans la vidéo" disabled>
+        <div class="temps-lecture">
+          <span>Position : <span class="mono" id="temps-actuel">0:00</span></span>
+          <span>Durée : <span class="mono" id="temps-total">0:00</span></span>
+        </div>
+        <div class="boutons-lecture">
+          <button type="button" class="bouton" data-action="reculer" disabled>
+            <svg class="icone" aria-hidden="true"><use href="#i-recul"/></svg>5 s
+          </button>
+          <button type="button" class="bouton bouton-principal" data-action="lecture" id="bouton-lecture" disabled>
+            <svg class="icone" aria-hidden="true"><use href="#i-lecture"/></svg><span>Lecture</span>
+          </button>
+          <button type="button" class="bouton" data-action="avancer" disabled>
+            5 s<svg class="icone" aria-hidden="true"><use href="#i-avance"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mes fichiers : vidéos, images, musiques -->
+    <div class="panneau">
+      <h2>Mes fichiers</h2>
+      <div class="boutons-import">
+        <button type="button" class="bouton" data-action="importer" data-type="video">
+          <svg class="icone" aria-hidden="true"><use href="#i-video"/></svg>Ajouter des vidéos
+        </button>
+        <button type="button" class="bouton" data-action="importer" data-type="image">
+          <svg class="icone" aria-hidden="true"><use href="#i-image"/></svg>Ajouter des images
+        </button>
+        <button type="button" class="bouton" data-action="importer" data-type="audio">
+          <svg class="icone" aria-hidden="true"><use href="#i-musique"/></svg>Ajouter des musiques
+        </button>
+      </div>
+      <p class="avis" id="import-etat" aria-live="polite" hidden></p>
+      <ul class="liste-medias" id="liste-medias"></ul>
+      <p class="vide" id="medias-vide">Aucun fichier pour l'instant. Commence par ajouter tes vidéos :
+         elles restent sur la tablette, rien n'est envoyé sur Internet.</p>
+    </div>
+  </div>
+
+  <!-- Sélecteurs de fichiers de la tablette (invisibles, ouverts par les boutons) -->
+  <input type="file" id="choisir-video" accept="video/*" multiple hidden>
+  <input type="file" id="choisir-image" accept="image/*" multiple hidden>
+  <input type="file" id="choisir-audio" accept="audio/*" multiple hidden>
+  <input type="file" id="choisir-retrouver" accept="video/*" multiple hidden>
+</section>
+
+
+<!-- ===================== VÉRIFIER MA TABLETTE ===================== -->
+<section class="vue vue-etroite" data-vue="tablette" aria-labelledby="titre-tablette" hidden>
+  <header class="barre">
+    <button type="button" class="bouton retour" data-action="retour">← Retour</button>
+    <h1 id="titre-tablette" tabindex="-1">Vérifier ma tablette</h1>
+  </header>
+
+  <div class="pile">
+    <p>Omni-Vidéo vérifie ici ce que ta tablette sait faire : lire les vidéos, fabriquer la vidéo
+       finale, garder tes projets… Rien n'est envoyé sur Internet.</p>
+    <div id="tablette-resume" class="bandeau" hidden>
+      <strong id="tablette-resume-titre"></strong>
+      <p id="tablette-resume-texte"></p>
+    </div>
+    <ul class="liste-tests" id="liste-tests"></ul>
+    <button type="button" class="bouton grand" data-action="refaire-test">
+      <svg class="icone" aria-hidden="true"><use href="#i-recul"/></svg>Refaire le test
+    </button>
+    <p class="aide" id="tablette-navigateur"></p>
+  </div>
+</section>
+
+
+<!-- ============================ À PROPOS ============================ -->
+<section class="vue vue-etroite" data-vue="apropos" aria-labelledby="titre-apropos" hidden>
+  <header class="barre">
+    <button type="button" class="bouton retour" data-action="retour">← Retour</button>
+    <h1 id="titre-apropos" tabindex="-1">À propos</h1>
+  </header>
+
+  <div class="pile">
+    <div class="bloc">
+      <div class="apropos-entete">
+        <img src="./logo.svg" alt="" width="84" height="84">
+        <div>
+          <p class="marque marque-petite">Omni<span>-Vidéo</span></p>
+          <p class="mono" id="numero-version">Version</p>
+        </div>
+      </div>
+      <p>Un outil de montage vidéo tout simple, pour préparer tes vidéos YouTube sur ta tablette :
+         couper, assembler, ajouter des textes, des images, de la musique, ta voix et des
+         sous-titres, puis fabriquer le fichier MP4 final.</p>
+      <p><strong>Application gratuite.</strong> Omni-Vidéo fonctionne sans connexion et sans compte.
+         Tes vidéos et tes projets restent sur ta tablette : rien n'est envoyé ailleurs.</p>
+    </div>
+
+    <!-- Mention de l'auteur : uniquement le pseudonyme, jamais le vrai nom.
+         Claude a aidé à écrire le code : l'application elle-même n'utilise
+         aucune intelligence artificielle et n'envoie rien. -->
+    <div class="bloc">
+      <p class="etiquette">Conception</p>
+      <p>Application développée par <strong>Ferrus Dantioch</strong>, avec l'aide de
+         <strong>Claude</strong>, une intelligence artificielle développée par Anthropic.</p>
+      <p>Omni-Vidéo est née d'une collaboration entre eux deux. Ferrus Dantioch, créateur
+         de l'Omni-système, en a eu l'idée, a choisi ses fonctions et son apparence, puis l'a
+         testée. Claude a écrit le code en suivant ses consignes, et ils l'ont améliorée
+         ensemble, échange après échange.</p>
+      <p>L'application elle-même n'utilise aucune intelligence artificielle.</p>
+      <!-- Le portfolio s'ouvre à part : Omni-Vidéo reste ouvert -->
+      <p><a href="https://ferrusdantioch.github.io/omni-systeme/" target="_blank" rel="noopener noreferrer">Découvrir l'Omni-système : le portfolio ↗</a></p>
+    </div>
+
+    <!-- Retours : le lien ouvre seulement l'application de messagerie,
+         adresse et sujet déjà remplis. Rien ne part tout seul. -->
+    <div class="bloc">
+      <p class="etiquette">Retours</p>
+      <p>Une idée, une gêne, quelque chose qui manque ? Tes retours sont les bienvenus,
+         même en quelques mots. Écris à :
+         <span class="adresse-mail">omni-systeme.choking513@passmail.net</span></p>
+      <a class="bouton large" href="mailto:omni-systeme.choking513@passmail.net?subject=Retour%20sur%20Omni-Vid%C3%A9o">Envoyer un retour par e-mail</a>
+    </div>
+
+    <!-- Licence : la même que L'Atelier, texte complet dans le fichier LICENSE -->
+    <div class="bloc">
+      <p class="etiquette">Licence</p>
+      <p>Distribuée sous licence
+         <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/deed.fr" target="_blank" rel="noopener noreferrer">Creative Commons BY-NC-ND 4.0</a>
+         (Attribution - Utilisation non commerciale - Pas d'Œuvre dérivée).</p>
+      <p>Tu peux utiliser Omni-Vidéo et en partager des copies identiques, gratuitement,
+         à condition de citer l'auteur (Ferrus Dantioch) et d'indiquer la licence. Il est
+         interdit de la vendre ou d'en tirer un profit commercial, et de diffuser une
+         version modifiée. Le logiciel est fourni « en l'état », sans aucune garantie.</p>
+      <p>Les vidéos que tu fabriques avec Omni-Vidéo t'appartiennent : la licence concerne
+         seulement le code de l'application.</p>
+      <p class="mono">© 2026 Ferrus Dantioch</p>
+    </div>
+
+    <!-- Crédits : les éléments créés par d'autres, chacun sous sa propre licence
+         (liste complète dans le fichier CREDITS.md) -->
+    <div class="bloc">
+      <p class="etiquette">Crédits</p>
+      <p><strong>Mediabunny</strong> (lecture et fabrication des fichiers vidéo), de Vanilagy
+         et ses contributeurs, version 1.63.0, sous sa propre licence, la Mozilla Public License 2.0
+         (fichier LICENCE-MEDIABUNNY.txt). Le fichier est inclus sans modification ; son code source
+         est disponible sur <a href="https://github.com/Vanilagy/mediabunny" target="_blank" rel="noopener noreferrer">github.com/Vanilagy/mediabunny ↗</a>.</p>
+      <p><strong>Polices de caractères</strong> : Oxanium, Literata et JetBrains Mono, sous leur
+         propre licence, la SIL Open Font License 1.1 (fichier POLICES-OFL.txt).</p>
+    </div>
+  </div>
+
+  <!-- Note d'installation : Chrome Android n'installe qu'une seule
+       application par adresse de site, et toutes les applications de
+       ferrusdantioch.github.io partagent la même. Masquée une fois
+       l'application installée (règle .note-installation de la feuille de style). -->
+  <p class="note-installation" style="margin-top:18px"><small><strong>Installation sur Android&nbsp;:</strong> si Chrome indique «&nbsp;Cette appli est déjà installée&nbsp;» alors qu'elle ne l'est pas, c'est une limite de Chrome quand une autre application de ce site est déjà installée. Utilise un autre navigateur (Brave, par exemple), ou choisis «&nbsp;Créer un raccourci&nbsp;».</small></p>
+
+  <p class="signature">Réalisé par Ferrus Dantioch</p>
+</section>
+
+</main>
+
+
+<!-- ============================ FENÊTRES ============================ -->
+
+<!-- Nouveau projet : un nom et un format -->
+<dialog id="fenetre-nouveau" aria-labelledby="titre-nouveau">
+  <form method="dialog">
+    <h2 id="titre-nouveau">Nouveau projet</h2>
+    <label class="champ">Nom de la vidéo
+      <input type="text" name="nom" maxlength="80" autocomplete="off" placeholder="Par exemple : Mon vlog du dimanche">
+    </label>
+    <fieldset class="choix">
+      <legend>Forme de la vidéo</legend>
+      <label>
+        <input type="radio" name="format" value="16:9" checked>
+        <span class="forme forme-169" aria-hidden="true"></span>
+        <strong>Horizontale</strong>
+        <small>16:9 — vidéo YouTube classique</small>
+      </label>
+      <label>
+        <input type="radio" name="format" value="9:16">
+        <span class="forme forme-916" aria-hidden="true"></span>
+        <strong>Verticale</strong>
+        <small>9:16 — YouTube Shorts</small>
+      </label>
+    </fieldset>
+    <p class="aide">Tu pourras changer la forme plus tard.</p>
+    <div class="rangee-2">
+      <button type="submit" class="bouton" value="annuler">Annuler</button>
+      <button type="submit" class="bouton bouton-principal" value="ok">Créer</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Renommer le projet -->
+<dialog id="fenetre-renommer" aria-labelledby="titre-renommer">
+  <form method="dialog">
+    <h2 id="titre-renommer">Renommer le projet</h2>
+    <label class="champ">Nouveau nom
+      <input type="text" name="nom" maxlength="80" autocomplete="off">
+    </label>
+    <div class="rangee-2">
+      <button type="submit" class="bouton" value="annuler">Annuler</button>
+      <button type="submit" class="bouton bouton-principal" value="ok">Valider</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Forme de la vidéo et façon de placer les vidéos qui n'ont pas la même forme -->
+<dialog id="fenetre-format" aria-labelledby="titre-format">
+  <form method="dialog">
+    <h2 id="titre-format">Forme de la vidéo</h2>
+    <fieldset class="choix">
+      <legend>Forme de la vidéo finale</legend>
+      <label>
+        <input type="radio" name="format" value="16:9">
+        <span class="forme forme-169" aria-hidden="true"></span>
+        <strong>Horizontale</strong>
+        <small>16:9 — YouTube classique</small>
+      </label>
+      <label>
+        <input type="radio" name="format" value="9:16">
+        <span class="forme forme-916" aria-hidden="true"></span>
+        <strong>Verticale</strong>
+        <small>9:16 — YouTube Shorts</small>
+      </label>
+    </fieldset>
+    <fieldset class="choix">
+      <legend>Quand une vidéo n'a pas la même forme</legend>
+      <label>
+        <input type="radio" name="ajustement" value="contenir">
+        <strong>Image entière</strong>
+        <small>Rien n'est coupé, avec des bandes noires sur les côtés</small>
+      </label>
+      <label>
+        <input type="radio" name="ajustement" value="remplir">
+        <strong>Remplir l'écran</strong>
+        <small>Pas de bandes, mais les bords de l'image sont coupés</small>
+      </label>
+    </fieldset>
+    <div class="rangee-2">
+      <button type="submit" class="bouton" value="annuler">Annuler</button>
+      <button type="submit" class="bouton bouton-principal" value="ok">Valider</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Petit message en bas de l'écran (« Vidéo ajoutée », erreurs…) -->
+<div class="message-flottant cache" id="message-flottant" role="status"></div>
+
+<!-- Si l'application n'a pas démarré au bout de 8 secondes, c'est que le
+     navigateur est trop ancien pour elle : on l'explique gentiment au lieu
+     de laisser un écran vide. (Ce petit script est écrit à l'ancienne
+     exprès, pour fonctionner même sur un très vieux navigateur.) -->
+<script>
+setTimeout(function () {
+  if (document.body.getAttribute('data-pret') === 'oui') return;
+  var p = document.getElementById('chargement');
+  if (p) p.innerHTML = 'Omni-Vidéo n\'arrive pas à démarrer sur ce navigateur.<br>' +
+    'Ouvre-la avec <strong>Google Chrome</strong>, mis à jour depuis le Play Store.';
+}, 8000);
+</script>
+</body>
+</html>

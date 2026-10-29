@@ -1,0 +1,618 @@
+/* Omni-Vidéo — © 2026 Ferrus Dantioch
+   Licence : Creative Commons BY-NC-ND 4.0 (texte complet dans le fichier LICENSE)
+   https://creativecommons.org/licenses/by-nc-nd/4.0/ */
+
+/* ============================================================
+   OMNI-VIDÉO — feuille de style
+   Principes appliqués :
+   - pensé pour une tablette tactile, en paysage comme en portrait
+   - boutons larges (au moins 56 px de haut), toujours une icône ET un texte
+   - aucune animation agressive, aucun clignotement
+   - le réglage « réduire les animations » de la tablette est respecté
+   - aucun blanc pur ni noir pur dans l'interface : pas de lumière forte
+   Les couleurs sont regroupées tout en haut (partie 2).
+   ============================================================ */
+
+
+/* ---------- 1. Polices ----------
+   Les trois polices du thème Omni-système, rangées DANS l'application
+   (fichiers .woff2 à côté de celui-ci) : elles marchent donc hors ligne.
+   Ce sont exactement les fichiers de L'Atelier et d'Omni-Time.
+   Licence : SIL Open Font License 1.1 (fichier POLICES-OFL.txt). */
+
+@font-face {
+  font-family: "Oxanium";               /* titres et boutons */
+  src: url("./oxanium.woff2") format("woff2");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;                   /* le texte s'affiche tout de suite */
+}
+@font-face {
+  font-family: "Literata";              /* texte courant */
+  src: url("./literata.woff2") format("woff2");
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";        /* chiffres (durées, tailles) */
+  src: url("./jetbrains-mono.woff2") format("woff2");
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+
+/* ---------- 2. Couleurs et formes du thème Omni-système ----------
+   Valeurs reprises À L'IDENTIQUE du portfolio de l'Omni-système, de
+   L'Atelier (css/theme.css) et d'Omni-Time (thème « omni ») : mêmes noms
+   de variables qu'Omni-Time. Ne pas les « améliorer ». */
+:root {
+  --fond:        #14111d;   /* « nuit » : encre violette très sombre */
+  --surface:     #1d1929;   /* « table » : cartes, panneaux */
+  --surface-2:   #251f35;   /* « table haute » : boutons, un cran plus clair */
+  --trait:       #332c47;   /* filets et bordures */
+  --texte:       #e9e4f2;   /* texte principal, jamais blanc pur */
+  --discret:     #a59cbb;   /* texte secondaire */
+  --accent:      #a777ff;   /* violet du logo */
+  --accent-texte:#140d24;   /* texte posé sur un bouton violet */
+  --halo:        #d6c2ff;   /* lueur de l'anneau (focus, liens) */
+  --lien:        #d6c2ff;
+  --or:          #c9a24a;   /* or « Fantasy » du portfolio (avertissements) */
+  --bleu:        #5fb4ff;   /* bleu « Space opéra » du portfolio (informations) */
+  --danger:      #e0705f;   /* actions qui font perdre quelque chose */
+  --danger-fond: #3a2027;
+  --danger-texte:#e9e4f2;
+
+  --f-titre:     "Oxanium", "Trebuchet MS", system-ui, sans-serif;
+  --f-texte:     "Literata", Georgia, "Times New Roman", serif;
+  --f-chiffres:  "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  /* Cartes à la façon du portfolio : liseré épais en haut, coins plus
+     arrondis en bas qu'en haut. */
+  --carte-bord:   1px solid #332c47;
+  --carte-lisere: 4px solid #a777ff;
+  --rayon-carte:  6px 6px 14px 14px;
+  --rayon-bouton: 10px;
+
+  /* Bord des boutons : à mi-chemin entre le texte secondaire et le fond,
+     pour qu'on voie bien où appuyer, sans trait éblouissant. */
+  --bord-bouton: color-mix(in srgb, var(--discret) 45%, var(--fond));
+  --duree: 400ms;           /* toutes les transitions, volontairement lentes */
+
+  color-scheme: dark;
+}
+
+
+/* ---------- 3. Base ---------- */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* Un élément marqué « hidden » est toujours caché, quoi qu'il arrive */
+[hidden] { display: none !important; }
+
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--fond);
+  color: var(--texte);
+  font-family: var(--f-texte);
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  -webkit-tap-highlight-color: transparent;
+}
+
+main {
+  margin: 0 auto;
+  padding: max(12px, env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom));
+}
+
+/* Écrans simples (accueil, test, à propos) : une colonne de lecture.
+   L'écran du projet, lui, prend toute la largeur (partie 7). */
+.vue-etroite { max-width: 760px; margin: 0 auto; }
+
+h1, h2, h3 { font-family: var(--f-titre); line-height: 1.15; margin: 0; }
+h1 { font-size: 1.5rem; font-weight: 700; }
+h2 { font-size: 1.3rem; font-weight: 700; }
+h3 { font-size: 1.1rem; font-weight: 700; }
+h1:focus, h2:focus { outline: none; }   /* le titre reçoit le focus en changeant d'écran */
+p { margin: 0; }
+
+a { color: var(--lien); text-underline-offset: 3px; overflow-wrap: anywhere; }
+
+:focus-visible {
+  outline: 3px solid var(--halo);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+small, .aide { color: var(--discret); font-size: 0.92rem; }
+
+/* Petit libellé en capitales espacées (style du portfolio) */
+.etiquette {
+  font-family: var(--f-titre);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--discret);
+}
+
+.mono { font-family: var(--f-chiffres); font-variant-numeric: tabular-nums; }
+
+/* Texte réservé aux lecteurs d'écran : invisible, mais lu à voix haute */
+.annonce {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.pile { display: grid; gap: 18px; }
+
+.erreur {
+  color: var(--danger-texte);
+  background: var(--danger-fond);
+  border: 2px solid var(--danger);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.avis {
+  color: var(--texte);
+  background: var(--surface-2);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+}
+
+/* Les icônes : toujours accompagnées d'un texte, jamais seules */
+.icone { width: 26px; height: 26px; flex-shrink: 0; display: block; }
+
+
+/* ---------- 4. Boutons ---------- */
+
+.bouton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 10px 16px;
+  border: 2px solid var(--bord-bouton);
+  border-radius: var(--rayon-bouton);
+  background: var(--surface-2);
+  color: var(--texte);
+  font: 700 1.05rem/1.2 var(--f-titre);
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  /* évite la sélection de texte et le menu « copier » sur un appui long */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+  transition: background-color var(--duree), border-color var(--duree), color var(--duree);
+}
+
+.bouton-principal {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-texte);
+}
+
+.bouton:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Bouton « armé » : premier appui fait sur une action qui fait perdre
+   quelque chose ; il faut appuyer une seconde fois pour confirmer. */
+.bouton.arme {
+  background: var(--danger-fond);
+  border-color: var(--danger);
+  color: var(--danger-texte);
+}
+
+/* Bouton discret (actions secondaires sur une carte) */
+.bouton-discret { background: transparent; }
+
+.large  { width: 100%; }
+.grand  { width: 100%; min-height: 64px; font-size: 1.15rem; }
+.enorme { width: 100%; min-height: 84px; font-size: 1.4rem; letter-spacing: 0.04em; }
+
+.rangee-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.rangee-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+
+
+/* ---------- 5. Cartes, blocs, bandeaux ---------- */
+
+.carte, .bloc {
+  background: var(--surface);
+  border: var(--carte-bord);
+  border-top: var(--carte-lisere);
+  border-radius: var(--rayon-carte);
+  padding: 18px;
+}
+.bloc { display: grid; gap: 12px; }
+
+.bandeau {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  border-radius: var(--rayon-carte);
+}
+.bandeau strong { font-family: var(--f-titre); font-size: 1.15rem; }
+.bandeau.attention { border-color: var(--or); }
+.bandeau.probleme  { border-color: var(--danger); }
+
+.vide {
+  padding: 16px;
+  color: var(--discret);
+  border: 2px dashed var(--trait);
+  border-radius: 14px;
+}
+
+
+/* ---------- 6. Accueil ---------- */
+
+.entete {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 0 20px;
+}
+.logo { width: 56px; height: 56px; display: block; flex-shrink: 0; }
+
+/* Le nom « Omni-Vidéo » garde la police du logo */
+.marque {
+  font-family: "Oxanium", "Trebuchet MS", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 2rem;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+.marque span { color: var(--accent); }
+.marque-petite { font-size: 1.5rem; }
+
+.liste-projets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+.projet-carte { display: grid; gap: 12px; }
+.projet-nom { font-size: 1.3rem; overflow-wrap: anywhere; }
+.projet-resume { color: var(--discret); font-size: 0.95rem; }
+
+.pied {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.signature {
+  margin-top: 28px;
+  text-align: center;
+  color: var(--discret);
+  font-family: var(--f-titre);
+  letter-spacing: 0.06em;
+}
+
+
+/* ---------- 7. Barre du haut des autres écrans ---------- */
+
+.barre {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 56px;
+  margin-bottom: 16px;
+}
+.retour { min-height: 52px; padding: 8px 14px; font-size: 1rem; flex-shrink: 0; }
+.barre h1 { overflow-wrap: anywhere; flex: 1 1 200px; }
+.etat-sauvegarde { color: var(--discret); font-size: 0.9rem; }
+
+
+/* ---------- 8. Fenêtres (renommer, créer un projet…) ----------
+   On utilise <dialog> : le reste de la page est grisé derrière. */
+
+dialog {
+  width: min(520px, calc(100vw - 32px));
+  padding: 22px;
+  color: var(--texte);
+  background: var(--surface);
+  border: var(--carte-bord);
+  border-top: var(--carte-lisere);
+  border-radius: var(--rayon-carte);
+}
+dialog::backdrop { background: rgb(10 8 16 / 0.75); }
+dialog form { display: grid; gap: 16px; }
+
+label.champ { display: grid; gap: 6px; font-family: var(--f-titre); font-weight: 600; }
+
+input[type="text"] {
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 2px solid var(--bord-bouton);
+  border-radius: var(--rayon-bouton);
+  background: var(--fond);
+  color: var(--texte);
+  font: 1.1rem var(--f-texte);
+}
+input[type="text"]:focus { border-color: var(--accent); outline: none; }
+
+/* Grandes cases à choix (format horizontal / vertical) */
+.choix { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; border: 0; padding: 0; margin: 0; }
+.choix legend { font-family: var(--f-titre); font-weight: 600; margin-bottom: 8px; padding: 0; }
+.choix label {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 14px 10px;
+  border: 2px solid var(--bord-bouton);
+  border-radius: var(--rayon-bouton);
+  background: var(--surface-2);
+  text-align: center;
+  cursor: pointer;
+}
+.choix input { position: absolute; opacity: 0; pointer-events: none; }
+.choix label:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--surface-2)); }
+.choix label:has(input:focus-visible) { outline: 3px solid var(--halo); outline-offset: 3px; }
+.choix strong { font-family: var(--f-titre); }
+/* Petit rectangle qui montre la forme de l'image */
+.forme { display: block; border: 2px solid var(--accent); border-radius: 4px; }
+.forme-169 { width: 64px; height: 36px; }
+.forme-916 { width: 26px; height: 46px; }
+
+
+/* ---------- 9. Écran du projet ----------
+   En paysage : l'aperçu à gauche, mes fichiers à droite.
+   En portrait : l'aperçu en haut, mes fichiers en dessous. */
+
+.vue-projet { max-width: 1500px; margin: 0 auto; }
+.vue-projet > .bandeau { margin-bottom: 18px; }
+
+.espace-projet {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 1fr;
+}
+@media (orientation: landscape) and (min-width: 900px) {
+  .espace-projet { grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); align-items: start; }
+}
+
+/* Zone d'aperçu : un cadre qui a la forme de la vidéo finale.
+   « container-type » permet de calculer la hauteur à partir de la
+   largeur disponible (unité cqw), sans jamais dépasser 58 % de l'écran. */
+.zone-apercu { container-type: inline-size; display: grid; gap: 12px; }
+.cadre-apercu {
+  --ratio-l: 16;
+  --ratio-h: 9;
+  position: relative;
+  aspect-ratio: var(--ratio-l) / var(--ratio-h);
+  height: min(58vh, 100cqw * var(--ratio-h) / var(--ratio-l));
+  max-width: 100%;
+  justify-self: center;
+  overflow: hidden;
+  /* Le fond de la vidéo est noir, comme sur YouTube : c'est le contenu
+     de la vidéo, pas l'interface. */
+  background: #000;
+  border: 1px solid var(--trait);
+  border-radius: 8px;
+}
+.cadre-apercu[data-format="9:16"] { --ratio-l: 9; --ratio-h: 16; }
+.cadre-apercu video,
+.cadre-apercu img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;        /* toute l'image, avec des bandes si besoin */
+}
+.cadre-apercu[data-ajustement="remplir"] video,
+.cadre-apercu[data-ajustement="remplir"] img { object-fit: cover; }
+
+/* Message affiché au milieu de l'aperçu (vide, musique…) */
+.apercu-message {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 16px;
+  text-align: center;
+  color: var(--discret);
+  background: var(--fond);
+}
+.apercu-message .icone { width: 48px; height: 48px; color: var(--accent); }
+
+/* Commandes de lecture : de gros boutons, la barre de temps en dessous */
+.commandes-lecture { display: grid; gap: 10px; }
+.boutons-lecture { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 10px; }
+.temps-lecture { display: flex; justify-content: space-between; color: var(--discret); font-size: 1rem; }
+.temps-lecture .mono { color: var(--texte); }
+
+/* Barre de temps : un curseur épais, facile à attraper au doigt */
+input[type="range"] {
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  background: transparent;
+  accent-color: var(--accent);
+  touch-action: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--trait);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  margin-top: -11px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--halo);
+}
+input[type="range"] { -webkit-appearance: none; appearance: none; }
+
+/* Panneau « Mes fichiers » */
+.panneau { display: grid; gap: 14px; align-content: start; }
+.boutons-import { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.boutons-import .bouton { flex-direction: column; min-height: 88px; padding: 10px 6px; font-size: 0.98rem; }
+.boutons-import .icone { width: 32px; height: 32px; color: var(--accent); }
+
+.liste-medias {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.media {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  background: var(--surface);
+  border: var(--carte-bord);
+  border-radius: 12px;
+}
+.media.actif { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.media.manquant, .media.illisible { border-style: dashed; }
+
+/* Bouton « voir » = la miniature elle-même, grande cible tactile */
+.media-voir {
+  position: relative;
+  width: 112px;
+  height: 72px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--fond);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.media-voir img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.media-voir .icone { margin: auto; width: 34px; height: 34px; color: var(--accent); }
+.media-duree {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgb(20 17 29 / 0.85);
+  color: var(--texte);
+  font: 600 0.8rem/1.5 var(--f-chiffres);
+}
+
+.media-infos { display: grid; gap: 6px; min-width: 0; }
+.media-nom { font-family: var(--f-titre); font-weight: 600; overflow-wrap: anywhere; line-height: 1.25; }
+.media-details { color: var(--discret); font-size: 0.88rem; }
+.media-probleme { color: var(--or); font-size: 0.9rem; }
+.media-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.media-actions .bouton { min-height: 48px; padding: 6px 12px; font-size: 0.92rem; }
+
+/* Petite pastille « Verticale », « Horizontale »… */
+.pastille {
+  display: inline-block;
+  padding: 1px 8px;
+  margin-right: 4px;
+  border: 1px solid var(--trait);
+  border-radius: 999px;
+  font: 600 0.78rem/1.6 var(--f-titre);
+  letter-spacing: 0.04em;
+  color: var(--texte);
+}
+
+
+/* ---------- 10. Écran « Vérifier ma tablette » ---------- */
+
+.liste-tests { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.test {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: var(--carte-bord);
+  border-left: 5px solid var(--trait);
+  border-radius: 10px;
+}
+.test[data-niveau="ok"]        { border-left-color: var(--accent); }
+.test[data-niveau="attention"] { border-left-color: var(--or); }
+.test[data-niveau="info"]      { border-left-color: var(--bleu); }
+.test[data-niveau="bloquant"]  { border-left-color: var(--danger); }
+.test-symbole { font: 800 1.4rem/1.2 var(--f-titre); text-align: center; }
+.test[data-niveau="ok"] .test-symbole        { color: var(--accent); }
+.test[data-niveau="attention"] .test-symbole { color: var(--or); }
+.test[data-niveau="info"] .test-symbole      { color: var(--bleu); }
+.test[data-niveau="bloquant"] .test-symbole  { color: var(--danger); }
+.test-titre { font-family: var(--f-titre); font-weight: 700; }
+.test-explication { color: var(--discret); font-size: 0.95rem; }
+
+
+/* ---------- 11. À propos ---------- */
+
+.apropos-entete { display: flex; align-items: center; gap: 16px; }
+.apropos-entete img { width: 84px; height: 84px; }
+.adresse-mail { font-family: var(--f-chiffres); overflow-wrap: anywhere; }
+
+/* Une fois l'application installée, la note d'installation ne sert plus */
+@media (display-mode: standalone) {
+  .note-installation { display: none; }
+}
+
+
+/* ---------- 12. Petit message en bas de l'écran ---------- */
+
+.message-flottant {
+  position: fixed;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 50;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 14px 18px;
+  background: var(--surface-2);
+  color: var(--texte);
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.45);
+  font-size: 1rem;
+  transition: opacity var(--duree);
+}
+.message-flottant.probleme { border-color: var(--danger); }
+.message-flottant.cache { opacity: 0; pointer-events: none; }
+
+/* Écran de chargement, affiché avant que l'application ne démarre */
+.chargement { padding: 40px 16px; text-align: center; color: var(--discret); }
+
+
+/* ---------- 13. Réduire les animations ----------
+   Si la tablette demande moins d'animations, on les coupe toutes. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}

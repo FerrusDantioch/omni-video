@@ -171,7 +171,7 @@ const Export = {
     $('#export-reprise').hidden = !reprise && !autreReprise;
     if (reprise) {
       ecrireTexte($('#export-reprise-texte'), 'La fabrication de cette vidéo a été interrompue (' +
-        Math.floor(Reprise.avancement(reprise) * 100) + ' % déjà faits). Touche « Fabriquer » : elle reprendra là où elle s\'était arrêtée.');
+        Math.floor(Reprise.avancement(reprise) * 100) + ' % déjà faits). Touche « Reprendre » : elle continuera là où elle s\'était arrêtée.');
       ecrireTexte($('#export-lancer span'), 'Reprendre');
     } else {
       if (autreReprise) {

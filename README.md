@@ -123,6 +123,7 @@ une musique de fond répétée, fondus au début et à la fin.
 | 30 min | 1080p | 16 min 39 s | 1,7 Go | 1,4 Go, stable |
 | 30 min | 720p | 15 min 9 s | 1,1 Go | 1,3 Go, stable |
 | 1 h | 1080p | 33 min 13 s | 3,4 Go | 1,4 Go, stable |
+| 10 min 5 s, coupée à 41 % puis reprise | 720p | 3 min 12 s après la reprise | 366 Mo | — |
 
 Ce que montrent ces essais :
 

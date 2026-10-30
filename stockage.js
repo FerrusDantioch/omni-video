@@ -314,6 +314,9 @@ const DUREE_IMAGE_DEFAUT = 5;   // secondes d'affichage d'une image ajoutée
 const DUREE_IMAGE_MAX = 600;
 const DUREE_CLIP_MIN = 0.1;     // un clip ne peut pas être plus court
 
+/* Les vitesses possibles d'un clip vidéo (1 = normale) */
+const VITESSES_CLIP = [0.5, 0.75, 1, 1.5, 2];
+
 function nettoyerClip(brut, medias) {
   if (!brut || typeof brut !== 'object' || typeof brut.id !== 'string') return null;
   const media = medias.find((m) => m.id === brut.mediaId);
@@ -327,6 +330,8 @@ function nettoyerClip(brut, medias) {
     debut,
     fin,
     volume: borner(Number.isFinite(brut.volume) ? brut.volume : 1, 0, 1),
+    // Ralenti (0,5) ou accéléré (2) : seulement pour une vidéo
+    vitesse: media.type === 'video' && VITESSES_CLIP.includes(brut.vitesse) ? brut.vitesse : 1,
     // La transition qui mène À ce clip depuis le précédent (ignorée pour le premier)
     transition: nettoyerTransition(brut.transition, TYPES_TRANSITION)
   };

@@ -660,6 +660,18 @@
           <svg class="icone" aria-hidden="true"><use href="#i-poubelle"/></svg>Supprimer le clip
         </button>
       </div>
+      <!-- La vitesse du clip vidéo (pas pour une image) -->
+      <div class="outil-vitesse" id="outil-vitesse">
+        <p class="etiquette">Vitesse du clip</p>
+        <div class="ed-choix" role="group" aria-label="Vitesse du clip">
+          <button type="button" class="bouton" data-action="vitesse-clip" data-vitesse="0.5">×0,5 ralenti</button>
+          <button type="button" class="bouton" data-action="vitesse-clip" data-vitesse="0.75">×0,75</button>
+          <button type="button" class="bouton" data-action="vitesse-clip" data-vitesse="1">×1 normale</button>
+          <button type="button" class="bouton" data-action="vitesse-clip" data-vitesse="1.5">×1,5</button>
+          <button type="button" class="bouton" data-action="vitesse-clip" data-vitesse="2">×2 accéléré</button>
+        </div>
+        <p class="aide">Le son suit la vitesse : plus grave au ralenti, plus aigu en accéléré. Tu peux couper le son du clip juste en dessous.</p>
+      </div>
       <!-- Le son du clip vidéo (pas pour une image) -->
       <div class="outil-volume" id="outil-volume">
         <label class="champ-curseur">Son du clip : <span class="mono" id="volume-clip-valeur">100 %</span>

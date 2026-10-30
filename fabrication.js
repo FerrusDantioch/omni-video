@@ -172,13 +172,15 @@ class SourceSon {
      - de la case ia à la case ib (exclue) des tableaux ;
      - tSortie : le moment de la case ia dans la vidéo finale ;
      - tSource : le moment correspondant DANS le fichier ;
-     - gainA(t) : le volume au moment t de la vidéo finale. */
-  async ajouter(gauche, droite, ia, ib, tSortie, tSource, gainA) {
+     - gainA(t) : le volume au moment t de la vidéo finale ;
+     - vitesse : 2 = le fichier est lu deux fois plus vite (son plus aigu). */
+  async ajouter(gauche, droite, ia, ib, tSortie, tSource, gainA, vitesse) {
     if (this.muet || ib <= ia) return;
     const fr = this.frequence;
     const n = ib - ia;
+    const vit = vitesse || 1;
     const f0 = Math.floor(tSource * fr);
-    const f1 = Math.ceil((tSource + n / FREQUENCE_SON) * fr) + 2;
+    const f1 = Math.ceil((tSource + n * vit / FREQUENCE_SON) * fr) + 2;
     await this._charger(f0, f1);
 
     // On recopie d'abord ces échantillons dans deux tableaux continus
@@ -195,7 +197,7 @@ class SourceSon {
     // Puis on les ajoute au mélange, en ajustant la fréquence et le volume.
     // Le volume est calculé tous les 128 échantillons (moins de 3 millièmes
     // de seconde) et glisse en douceur entre deux calculs.
-    const pas = fr / FREQUENCE_SON;
+    const pas = fr / FREQUENCE_SON * vit;
     const depart = tSource * fr - f0;
     const BLOC = 128;
     for (let k0 = 0; k0 < n; k0 += BLOC) {
@@ -274,8 +276,8 @@ class Melangeur {
       if (ib <= ia) continue;
       const tSortie = (e0 + ia) / FREQUENCE_SON;
       const s = await this._sonDe('clip' + i, seg.media);
-      await s.ajouter(gauche, droite, ia, ib, tSortie, seg.clip.debut + (tSortie - seg.debut),
-        (t) => seg.clip.volume * Montage.etat(projet, segments, i, t).son);
+      await s.ajouter(gauche, droite, ia, ib, tSortie, Montage.tempsFichier(seg, tSortie),
+        (t) => seg.clip.volume * Montage.etat(projet, segments, i, t).son, Montage.vitesse(seg));
     }
     // La musique de fond et les voix off
     for (const { piste, media } of this.pistes) {
@@ -771,7 +773,7 @@ async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouverte
   }
 
   for (const { i, seg, etat } of actifs) {
-    const tFichier = seg.clip.debut + (t - seg.debut);
+    const tFichier = Montage.tempsFichier(seg, t);
     if (seg.media.type === 'video') {
       let source = ouvertes.get(i);
       if (!source) {

@@ -135,6 +135,7 @@ const ACTIONS = {
   'duree-image':      (b) => Chronologie.dureeImage(Number(b.dataset.secondes)),
   'supprimer-clip':   (b) => Chronologie.supprimerClip(b),
   'dupliquer-clip':   () => Chronologie.dupliquerClip(),
+  'vitesse-clip':     (b) => Chronologie.vitesseClip(Number(b.dataset.vitesse)),
 
   // Onglets, textes et images incrustées
   'onglet':               (b) => Onglets.ouvrir(b.dataset.onglet),

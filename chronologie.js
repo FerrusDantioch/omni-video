@@ -409,10 +409,18 @@ const Chronologie = {
       $('#bouton-muet-clip').disabled = Lecteur.enLecture;
       if (!this._volumeEnCours) this._majVolume(seg);
     }
+    // La vitesse : seulement pour une vidéo
+    $('#outil-vitesse').hidden = seg.media.type !== 'video';
+    $$('[data-action="vitesse-clip"]', zone).forEach((b) => {
+      b.setAttribute('aria-pressed', String(Number(b.dataset.vitesse) === Montage.vitesse(seg)));
+      b.disabled = Lecteur.enLecture;
+    });
     if (image) $('[data-action="duree-image"][data-secondes="-1"]', zone).disabled = seg.fin - seg.debut <= 1.05 || Lecteur.enLecture;
 
+    const vitesse = Montage.vitesse(seg);
     ecrireTexte($('#outils-titre'), 'Clip ' + (i + 1) + ' sur ' + n + ' · ' + seg.media.nom + ' · ' +
-      dureeEnMots(seg.fin - seg.debut) + (Lecteur.enLecture ? ' — mets en pause pour modifier' : ''));
+      dureeEnMots(seg.fin - seg.debut) + (vitesse !== 1 ? ' · vitesse ×' + String(vitesse).replace('.', ',') : '') +
+      (Lecteur.enLecture ? ' — mets en pause pour modifier' : ''));
   },
 
   majBoutonsHistorique() {
@@ -506,7 +514,7 @@ const Chronologie = {
     const seg = Lecteur.segmentCourant();
     if (!seg || Lecteur.enLecture) return null;
     const i = Lecteur.segments.indexOf(seg);
-    return { seg, i, local: seg.clip.debut + (Lecteur.t - seg.debut) };
+    return { seg, i, local: Montage.tempsFichier(seg, Lecteur.t) };
   },
 
   /* Ajoute un fichier (vidéo entière ou image) à la fin de la vidéo */
@@ -581,6 +589,17 @@ const Chronologie = {
     const clip = c.seg.clip;
     clip.fin = borner(clip.fin + secondes, clip.debut + 1, DUREE_IMAGE_MAX);
     this._apresModification(Math.min(Lecteur.t, c.seg.debut + (clip.fin - clip.debut) - 0.05));
+  },
+
+  /* Ralenti / accéléré : la ligne violette reste sur la même image */
+  vitesseClip(vitesse) {
+    const c = this._cible();
+    if (!c || c.seg.media.type !== 'video' || !VITESSES_CLIP.includes(vitesse)) return;
+    if (Montage.vitesse(c.seg) === vitesse) return;
+    this._memoriser();
+    c.seg.clip.vitesse = vitesse;
+    Lecteur.calculer(Projets.courant);
+    this._apresModification(Montage.tempsMontage(Lecteur.segments[c.i], c.local));
   },
 
   /* Dupliquer le clip : la copie se place juste après lui */

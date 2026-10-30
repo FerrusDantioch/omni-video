@@ -793,6 +793,8 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
 .outils-boutons .bouton { flex: 1 1 150px; min-height: 56px; padding: 6px 10px; font-size: 0.95rem; }
 .outils-boutons .outil-image { flex: 0 1 90px; font-family: var(--f-chiffres); }
 /* Le son du clip : un curseur et un bouton « Couper le son » */
+.outil-vitesse { display: grid; gap: 6px; }
+.outil-vitesse .ed-choix .bouton { flex: 1 1 90px; font-family: var(--f-chiffres); }
 .outil-volume { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
 .outil-volume .champ-curseur { grid-template-columns: auto 4.5em minmax(0, 1fr); align-items: center; gap: 8px; }
 .outil-volume .bouton { min-height: 52px; font-size: 0.95rem; }

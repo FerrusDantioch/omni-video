@@ -208,6 +208,105 @@ document.addEventListener('visibilitychange', () => {
 });
 
 
+/* ---------- La batterie ----------
+   Chrome dit si la tablette est branchée et combien il reste de batterie.
+   Sert à conseiller de brancher la tablette avant une longue fabrication,
+   et à la mettre en pause si la batterie devient trop faible. Si le
+   navigateur ne le dit pas, on fait comme si la tablette était branchée
+   (on ne dérange personne pour rien). */
+const SEUIL_BATTERIE_FAIBLE = 0.15;   // 15 %
+
+const Batterie = {
+  _gestion: null,
+  _quandChange: [],
+
+  async initialiser() {
+    if (typeof navigator.getBattery !== 'function') return;
+    try {
+      this._gestion = await navigator.getBattery();
+    } catch (e) {
+      return;
+    }
+    const prevenir = () => this._quandChange.forEach((f) => f());
+    this._gestion.addEventListener('chargingchange', prevenir);
+    this._gestion.addEventListener('levelchange', prevenir);
+  },
+
+  /* { branchee, niveau (0 à 1) }, ou null si on ne sait pas */
+  etat() {
+    const g = this._gestion;
+    if (!g) return null;
+    return { branchee: !!g.charging, niveau: Number.isFinite(g.level) ? g.level : 1 };
+  },
+
+  faible() {
+    const e = this.etat();
+    return !!e && !e.branchee && e.niveau <= SEUIL_BATTERIE_FAIBLE;
+  },
+
+  /* Appelle « f » à chaque changement (branchée / débranchée, niveau) */
+  surveiller(f) {
+    this._quandChange.push(f);
+  }
+};
+
+
+/* ---------- Le signal de fin ----------
+   Une vibration et deux petites notes douces quand la vidéo est prête :
+   on peut faire autre chose pendant la fabrication. Le son est fabriqué
+   sur place (pas de fichier). Le « lecteur de son » est préparé au moment
+   où on touche « Fabriquer » : le navigateur n'autorise un son qu'après un
+   geste de la personne. */
+const SignalFin = {
+  _son: null,
+
+  preparer() {
+    const Contexte = window.AudioContext || window.webkitAudioContext;
+    if (!Contexte || this._son) return;
+    try {
+      this._son = new Contexte();
+      this._son.suspend().catch(() => {});   // en sommeil jusqu'à la fin
+    } catch (e) {
+      this._son = null;
+    }
+  },
+
+  async jouer() {
+    try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch (e) { /* pas de vibreur */ }
+    const son = this._son;
+    this._son = null;
+    if (!son) return;
+    try {
+      await son.resume();
+      const debut = son.currentTime + 0.05;
+      // Deux notes qui montent (do puis sol), avec une attaque et une fin douces
+      [[523.25, 0], [783.99, 0.22]].forEach(([frequence, decalage]) => {
+        const note = son.createOscillator();
+        const volume = son.createGain();
+        note.type = 'sine';
+        note.frequency.value = frequence;
+        const t = debut + decalage;
+        volume.gain.setValueAtTime(0, t);
+        volume.gain.linearRampToValueAtTime(0.25, t + 0.03);
+        volume.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+        note.connect(volume).connect(son.destination);
+        note.start(t);
+        note.stop(t + 0.65);
+      });
+      setTimeout(() => son.close().catch(() => {}), 1500);
+    } catch (e) {
+      son.close().catch(() => {});
+    }
+  },
+
+  /* Pas de signal (fabrication arrêtée ou en erreur) : on range le lecteur */
+  oublier() {
+    if (this._son) this._son.close().catch(() => {});
+    this._son = null;
+  }
+};
+
+
 /* ---------- Petit message en bas de l'écran ----------
    Pour dire « C'est fait » ou expliquer un souci, sans fenêtre à fermer.
    Il disparaît tout seul (plus lentement si c'est un problème, pour

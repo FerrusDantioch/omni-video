@@ -107,6 +107,22 @@ const Base = {
 
   async supprimerFichier(id) {
     await this._operation('fichiers', 'readwrite', (m) => m.delete(id));
+  },
+
+  /* La taille de chaque fichier léger rangé (Map numéro → octets), pour
+     « Place utilisée ». Seule la taille est lue, pas le contenu. */
+  async taillesFichiers() {
+    const tailles = new Map();
+    await this._operation('fichiers', 'readonly', (m) => {
+      const curseur = m.openCursor();
+      curseur.onsuccess = () => {
+        const c = curseur.result;
+        if (!c) return;
+        tailles.set(String(c.key), (c.value && c.value.size) || 0);
+        c.continue();
+      };
+    });
+    return tailles;
   }
 };
 

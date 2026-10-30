@@ -199,6 +199,34 @@ README), dans le groupe « Création de contenu ».
     vidéos), repousse le reste au début, sans transition à la jointure.
   - `guide.js` : `omnivideo-guide-vu`, bulles sans voile.
   - Six onglets : grille de 3 colonnes.
+- Version 1.2 :
+  - `blancs.js` : « Enlever les blancs » d'un clip vidéo avec son. Volume
+    par tranche de 50 ms (`AudioBufferSink.buffers(debut, fin)`, rien
+    d'entier en mémoire), seuil propre au clip (`seuilSilence()` : 10 %
+    les plus calmes + max(6 dB, 30 % de l'écart avec les 10 % les plus
+    forts)), bruit < 0,15 s ignoré, souffle de 0,2 s gardé. Le clip est
+    remplacé par ses morceaux (une étape d'Annuler ; seul le 1er garde sa
+    transition). Calques, sous-titres, pistes et chapitres ne bougent PAS
+    (temps du montage) : avertissement `#blancs-avis`.
+  - `RappelSauvegarde` (sauvegarde.js) : dates dans `omnivideo-sauvegardes`
+    (`{ id: date }`, notée à chaque sauvegarde ET à l'import), bandeau
+    `#bandeau-sauvegarde` si changements non sauvegardés depuis 7 jours
+    (référence = dernière sauvegarde, sinon `cree`), « Plus tard » =
+    `omnivideo-rappel-repousse` (3 jours).
+  - `Place` (capacites.js) : « Place utilisée » en bas de « Vérifier ma
+    tablette ». `Base.taillesFichiers()` (curseur, tailles seulement).
+    ⚠️ Le disque privé est partagé avec les autres applications du site :
+    ne lister / effacer QUE les noms `omnivideo-*`. « Fichiers oubliés » =
+    clés du tiroir `fichiers` qu'aucun projet ne référence (effacés
+    seulement projet fermé, mesure refaite juste avant).
+  - `Batterie` et `SignalFin` (outils.js). Batterie : `navigator.getBattery()`
+    (absent = on ne dit rien). Conseil `#export-batterie` avant une longue
+    fabrication ; sous 15 % pendant une fabrication PAR MORCEAUX
+    (`Reprise.pour(projet)` non nul) et si le niveau de départ était
+    au-dessus : arrêt propre (`_arretBatterie`) ; sinon simple avertissement
+    `#export-batterie-faible`. SignalFin : vibration + deux notes
+    (oscillateurs), `AudioContext` créé au toucher de « Fabriquer » (sinon
+    le navigateur refuse le son), case `omnivideo-signal-fin`.
 - ⚠️ `rendu.js` dessine les calques pour l'aperçu ET pour l'export : ne jamais
   dessiner un calque autrement à l'export, sinon l'aperçu mentirait.
 - ⚠️ `nettoyerProjet()` et `nettoyerMedia()` ne gardent **que** les champs

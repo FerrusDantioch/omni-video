@@ -426,6 +426,8 @@ const Chronologie = {
     // Le son du clip : seulement pour une vidéo qui a du son
     const avecSon = seg.media.type === 'video' && seg.media.aSon;
     $('#outil-volume').hidden = !avecSon;
+    $('#outil-blancs').hidden = !avecSon;
+    actif('enlever-blancs', avecSon);
     if (avecSon) {
       $('#volume-clip').disabled = Lecteur.enLecture;
       $('#bouton-muet-clip').disabled = Lecteur.enLecture;

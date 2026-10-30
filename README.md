@@ -26,6 +26,7 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
 | g. Export MP4 | H.264 + AAC, 16:9 ou 9:16, 720p ou 1080p, 30 images par seconde ; progression, temps restant, arrêt ; écran gardé allumé ; enregistrement dans la tablette ou partage | ✅ |
 | h. Hors ligne | Fonctionne sans Internet après la première visite, installation sur l'écran d'accueil, mise à jour au choix (« Mettre à jour »), sauvegarde et import de projet (fichier .omnivideo) | ✅ |
 | Version 1.1 | Onglet « YouTube » (miniature, chapitres), volume harmonisé, musique qui baisse sous la voix, dupliquer, ralenti / accéléré, photos qui bougent, lumière et couleurs, guide de la première fois, intro et fin réutilisables, reprise d'une longue fabrication interrompue | ✅ |
+| Version 1.2 | Enlever les blancs d'un clip, rappel de sauvegarde, place utilisée et ménage, conseils et pause selon la batterie, signal de fin de fabrication | ✅ |
 
 ### Bon à savoir
 
@@ -77,6 +78,18 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
   fichier .omnivideo avec le montage, les images, les musiques et les voix
   off. Les vidéos n'y sont pas (trop lourdes) : après « Importer une
   sauvegarde de projet », on les redonne avec « Retrouver mes vidéos ».
+  Chaque carte de projet indique la date de sa dernière sauvegarde. Si un
+  projet a des changements qui ne sont dans aucune sauvegarde depuis plus
+  d'une semaine, un **bandeau de rappel** apparaît sur l'accueil
+  (« Plus tard » le fait taire trois jours). Rangez ensuite ce fichier
+  ailleurs que dans la tablette (ordinateur, clé USB, Drive…).
+- **Enlever les blancs** (sous la chronologie, pour un clip vidéo avec du
+  son) : Omni-Vidéo écoute le clip, repère les moments où personne ne parle
+  et les coupe d'un geste, en gardant un petit souffle autour de chaque
+  phrase. On choisit la longueur des silences enlevés (½, 1 ou 2 secondes).
+  Le clip devient plusieurs morceaux ; « Annuler » remet tout. Les textes,
+  sous-titres et musiques placés après ne bougent pas : le mieux est
+  d'enlever les blancs avant de les ajouter.
 - **Onglet « YouTube »** : la **miniature** (une image de la vidéo prise à la
   ligne violette, avec un titre en gros, enregistrée en JPEG 1280 × 720) et
   les **chapitres** (des repères posés à la ligne violette ; « Copier pour
@@ -101,11 +114,21 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
   (batterie, appel, application fermée, ou « Arrêter »), le bouton devient
   « Reprendre » : seuls les morceaux manquants sont refaits. Si le montage
   ou les réglages ont changé entre-temps, tout recommence.
+- **Batterie** : si la tablette n'est pas branchée avant une longue
+  fabrication, Omni-Vidéo conseille de la brancher. Si la batterie tombe
+  sous 15 % pendant la fabrication d'une longue vidéo, elle se met en pause
+  toute seule (rien n'est perdu, « Reprendre » continue) ; pour une vidéo
+  courte, elle prévient seulement.
+- **Signal de fin** : une vibration et deux petites notes quand la vidéo est
+  prête (case « Me prévenir à la fin »).
 - **Le guide de la première fois** : cinq bulles à la première ouverture d'un
   projet. On peut le revoir depuis « À propos ».
 - **Le test de la tablette** (bouton « Vérifier ma tablette ») indique ce qui
   fonctionne : lecture des vidéos, fabrication du MP4, place disponible,
-  mémoire, micro…
+  mémoire, micro… En bas, **« Place utilisée par Omni-Vidéo »** détaille ce
+  qu'elle range (images, musiques et voix de chaque projet, copie de la
+  dernière vidéo, morceaux d'une fabrication interrompue, fichiers oubliés)
+  et permet d'effacer ce qui ne sert plus (deux appuis).
 - **Navigateur conseillé** : Google Chrome à jour (version 107 ou plus).
 
 ## Essais de l'export (limites mesurées)
@@ -173,6 +196,7 @@ pouvoir les envoyer depuis un téléphone ou une tablette.
 | `youtube.js` | L'onglet « YouTube » : la miniature et les chapitres |
 | `guide.js` | Le guide de la première fois (les bulles) |
 | `intro.js` | Ajouter un autre projet (son intro, sa fin) au début ou à la fin de la vidéo |
+| `blancs.js` | « Enlever les blancs » : repérer et couper les silences d'un clip |
 | `disque-prive.js` | Un petit « travailleur » qui écrit la vidéo finale sur la tablette, morceau par morceau (indispensable sur Android pour les vidéos longues) |
 | `export.js` | La fenêtre « Fabriquer la vidéo » : réglages, progression, vidéo prête |
 | `encodeur-aac.js` `encodeur-aac.wasm` | L'encodeur AAC de secours, celui de VisualOn (seulement si la tablette ne sait pas fabriquer le son AAC ; ne pas modifier le .wasm) |

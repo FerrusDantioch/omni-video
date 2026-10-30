@@ -42,6 +42,7 @@
 <script defer src="./youtube.js"></script>
 <script defer src="./guide.js"></script>
 <script defer src="./intro.js"></script>
+<script defer src="./blancs.js"></script>
 <script defer src="./projets.js"></script>
 <script defer src="./app.js"></script>
 </head>
@@ -118,6 +119,17 @@
       <div class="rangee-2">
         <button type="button" class="bouton bouton-principal" data-action="mettre-a-jour">Mettre à jour</button>
         <button type="button" class="bouton" data-action="plus-tard">Plus tard</button>
+      </div>
+    </div>
+
+    <!-- Rappel : un projet n'a pas été sauvegardé depuis longtemps (voir RappelSauvegarde dans sauvegarde.js) -->
+    <div id="bandeau-sauvegarde" class="bandeau" hidden>
+      <strong id="rappel-sauvegarde-titre"></strong>
+      <p id="rappel-sauvegarde-texte"></p>
+      <div class="rangee-2">
+        <button type="button" class="bouton bouton-principal" data-action="sauvegarder-projet" id="rappel-sauvegarde-bouton">
+          <svg class="icone" aria-hidden="true"><use href="#i-telecharger"/></svg>Sauvegarder</button>
+        <button type="button" class="bouton" data-action="rappel-plus-tard">Plus tard</button>
       </div>
     </div>
 
@@ -670,6 +682,9 @@
         <button type="button" class="bouton" data-action="dupliquer-clip">
           <svg class="icone" aria-hidden="true"><use href="#i-copier"/></svg>Dupliquer le clip
         </button>
+        <button type="button" class="bouton" data-action="enlever-blancs" id="outil-blancs">
+          <svg class="icone" aria-hidden="true"><use href="#i-ciseaux"/></svg>Enlever les blancs
+        </button>
         <button type="button" class="bouton" data-action="supprimer-clip">
           <svg class="icone" aria-hidden="true"><use href="#i-poubelle"/></svg>Supprimer le clip
         </button>
@@ -757,6 +772,13 @@
       <svg class="icone" aria-hidden="true"><use href="#i-recul"/></svg>Refaire le test
     </button>
     <p class="aide" id="tablette-navigateur"></p>
+
+    <!-- Place utilisée et ménage (voir Place dans capacites.js) -->
+    <div class="bloc bloc-place">
+      <h2>Place utilisée par Omni-Vidéo</h2>
+      <ul class="liste-tests" id="place-liste"></ul>
+      <p class="aide" id="place-libre"></p>
+    </div>
   </div>
 </section>
 
@@ -1002,6 +1024,32 @@
   </form>
 </dialog>
 
+<!-- Enlever les blancs d'un clip vidéo (voir blancs.js) -->
+<dialog id="fenetre-blancs" aria-labelledby="titre-blancs">
+  <form method="dialog">
+    <h2 id="titre-blancs">Enlever les blancs</h2>
+    <p class="aide">Omni-Vidéo écoute ce clip et enlève les moments où personne ne parle.
+       Un petit souffle est gardé autour de chaque phrase pour ne pas couper les mots.</p>
+    <p class="mono" id="blancs-etat" aria-live="polite"></p>
+    <fieldset class="choix choix-3" id="blancs-choix" hidden>
+      <legend>Enlever les silences de plus de</legend>
+      <label><input type="radio" name="minimum" value="0.5"><strong>Courts</strong><small>½ seconde</small></label>
+      <label><input type="radio" name="minimum" value="1" checked><strong>Moyens</strong><small>1 seconde</small></label>
+      <label><input type="radio" name="minimum" value="2"><strong>Longs</strong><small>2 secondes</small></label>
+    </fieldset>
+    <p id="blancs-resultat" aria-live="polite" hidden></p>
+    <p class="avis attention-douce" id="blancs-avis" hidden>Les textes, sous-titres, musiques et chapitres placés
+       après ce clip ne bougent pas avec lui : vérifie-les ensuite. Le plus simple : enlever les blancs
+       AVANT de les ajouter.</p>
+    <div class="rangee-2">
+      <button type="submit" class="bouton" value="annuler">Annuler</button>
+      <button type="submit" class="bouton bouton-principal" value="ok" id="blancs-valider">
+        <svg class="icone" aria-hidden="true"><use href="#i-ciseaux"/></svg>Enlever
+      </button>
+    </div>
+  </form>
+</dialog>
+
 <!-- Importer des sous-titres alors qu'il y en a déjà (voir sous-titres.js) -->
 <dialog id="fenetre-import-st" aria-labelledby="titre-import-st">
   <form method="dialog">
@@ -1061,6 +1109,10 @@
       <p class="avis">Pendant la fabrication, <strong>garde Omni-Vidéo ouverte</strong> : ne change pas d'application
          et ne verrouille pas la tablette (Omni-Vidéo garde l'écran allumé). Pour une longue vidéo,
          branche la tablette sur son chargeur.</p>
+      <!-- Tablette pas branchée (voir Batterie dans outils.js) -->
+      <p class="avis attention-douce" id="export-batterie" hidden></p>
+      <label class="interrupteur"><input type="checkbox" id="export-signal" checked>
+        Me prévenir à la fin (vibration et petit son)</label>
       <p class="erreur" id="export-probleme" hidden></p>
       <!-- Une longue fabrication interrompue (voir reprise.js) -->
       <div class="bloc-dernier" id="export-reprise" hidden>
@@ -1096,6 +1148,7 @@
          la vidéo se fabrique toute seule.</p>
       <p class="avis attention-douce" id="export-quitte" hidden>Tu as quitté Omni-Vidéo un moment : la fabrication
          a pu ralentir ou se mettre en pause. Elle reprend maintenant.</p>
+      <p class="avis attention-douce" id="export-batterie-faible" hidden></p>
       <button type="button" class="bouton large" data-action="export-arreter">
         <svg class="icone" aria-hidden="true"><use href="#i-stop"/></svg><span>Arrêter la fabrication</span>
       </button>

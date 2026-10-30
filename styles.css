@@ -1078,6 +1078,19 @@ dialog.fenetre-large { width: min(900px, calc(100vw - 24px)); padding: 18px; }
 .test-titre { font-family: var(--f-titre); font-weight: 700; }
 .test-explication { color: var(--discret); font-size: 0.95rem; }
 
+/* « Place utilisée » : une ligne par sorte de fichiers, la taille à droite */
+.bloc-place { display: grid; gap: 12px; }
+.place-ligne {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border-radius: 10px;
+}
+.place-entete { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.place-entete .mono { font-family: var(--f-chiffres); white-space: nowrap; }
+.place-ligne .bouton { justify-self: start; }
+
 
 /* ---------- 11. À propos ---------- */
 

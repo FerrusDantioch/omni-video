@@ -21,6 +21,7 @@
 const CLE_VITESSE = 'omnivideo-vitesse-';   // + qualité : secondes de fabrication par seconde de vidéo
 const CLE_QUALITE = 'omnivideo-qualite';
 const CLE_HARMONISER = 'omnivideo-harmoniser';   // 'non' si la case « volume harmonisé » est décochée
+const CLE_SIGNAL = 'omnivideo-signal-fin';       // 'non' si la case « me prévenir à la fin » est décochée
 
 /* Petites aides pour se souvenir de réglages (sans jamais planter si le
    navigateur refuse) */
@@ -69,6 +70,52 @@ const Export = {
     });
     // Changer la forme ou la qualité met à jour l'estimation
     $('form', fenetre).addEventListener('change', () => this.majReglages());
+    // La tablette est branchée ou débranchée, sa batterie baisse
+    Batterie.initialiser().then(() => Batterie.surveiller(() => {
+      if (this.enCours) this._verifierBatterie();
+      else if (fenetre.open) this._majBatterie();
+    }));
+  },
+
+  /* Avant de commencer : conseiller de brancher la tablette */
+  _majBatterie() {
+    const avis = $('#export-batterie');
+    const e = Batterie.etat();
+    if (!e || e.branchee || !Projets.courant) { avis.hidden = true; return; }
+    const duree = this._duree();
+    const vitesse = Number(lireReglage(CLE_VITESSE + (this._formulaire().elements.qualite.value || '720p')));
+    // « Longue » : plus de 3 minutes de vidéo, ou plus de 5 minutes de fabrication prévues
+    const longue = duree >= 180 || (vitesse > 0 && vitesse * duree >= 300);
+    const pourcent = Math.round(e.niveau * 100);
+    if (!longue && e.niveau > 0.3) { avis.hidden = true; return; }
+    ecrireTexte(avis, 'Ta tablette n\'est pas branchée (batterie à ' + pourcent + ' %). ' +
+      (longue ? 'Pour une vidéo de cette longueur, branche-la sur son chargeur avant de commencer.'
+              : 'Branche-la sur son chargeur avant de commencer.'));
+    avis.hidden = false;
+  },
+
+  /* Pendant la fabrication : la batterie devient faible.
+     - Longue vidéo (fabriquée par morceaux) : pause propre, rien n'est perdu.
+     - Sinon, un arrêt ferait tout perdre : on demande de brancher la tablette.
+     Si la batterie était déjà faible au départ, on se contente de prévenir
+     (la personne a choisi de commencer quand même). */
+  _verifierBatterie() {
+    if (!this.enCours || !this._arret) return;
+    const avis = $('#export-batterie-faible');
+    if (!Batterie.faible()) { avis.hidden = true; return; }
+    if (this._arret.demande) return;
+    const pourcent = Math.round(Batterie.etat().niveau * 100);
+    const projet = Projets.courant;
+    if (projet && Reprise.pour(projet) && this._niveauDepart > SEUIL_BATTERIE_FAIBLE) {
+      this._arretBatterie = true;
+      this._arret.demande = true;
+      ecrireTexte($('#export-detail'), 'Arrêt en cours…');
+      ecrireTexte(avis, 'Batterie faible (' + pourcent + ' %) : Omni-Vidéo met la fabrication en pause. Ce qui est fait est gardé.');
+    } else {
+      ecrireTexte(avis, 'Batterie faible (' + pourcent + ' %) ! Branche vite ta tablette sur son chargeur : ' +
+        'si elle s\'éteint, la fabrication sera perdue.');
+    }
+    avis.hidden = false;
   },
 
   _etape(nom) {
@@ -92,6 +139,7 @@ const Export = {
     const qualite = lireReglage(CLE_QUALITE) || '1080p';
     f.elements.qualite.value = avec1080 ? qualite : '720p';
     $('#export-harmoniser').checked = lireReglage(CLE_HARMONISER) !== 'non';
+    $('#export-signal').checked = lireReglage(CLE_SIGNAL) !== 'non';
     $('#fenetre-export input[value="1080p"]').disabled = !avec1080;
     $('#export-sans-1080').hidden = avec1080;
     $('#export-dernier').hidden = true;
@@ -180,6 +228,7 @@ const Export = {
       }
       ecrireTexte($('#export-lancer span'), 'Fabriquer');
     }
+    this._majBatterie();
     const probleme = await this._probleme(qualite);
     ecrireTexte($('#export-probleme'), probleme);
     $('#export-probleme').hidden = !probleme;
@@ -209,13 +258,21 @@ const Export = {
     ecrireReglage(CLE_QUALITE, qualite);
     const harmoniser = $('#export-harmoniser').checked;
     ecrireReglage(CLE_HARMONISER, harmoniser ? 'oui' : 'non');
+    const signal = $('#export-signal').checked;
+    ecrireReglage(CLE_SIGNAL, signal ? 'oui' : 'non');
+    if (signal) SignalFin.preparer();   // maintenant : le son n'est permis qu'après un geste
 
     this._arret = { demande: false };
+    this._arretBatterie = false;
+    const batterie = Batterie.etat();
+    this._niveauDepart = batterie ? batterie.niveau : 1;
     this._quitte = false;
     this._fichier = null;
     $('#export-quitte').hidden = true;
+    $('#export-batterie-faible').hidden = true;
     this._suivi({ fait: 0, image: 0, images: 0, etape: 'preparation' });
     this._etape('travail');
+    this._verifierBatterie();
     Veille.empecher();
     // L'aperçu lâche ses vidéos pendant la fabrication : une tablette ne
     // peut lire que quelques vidéos à la fois, autant les laisser à l'export
@@ -232,19 +289,26 @@ const Export = {
       this._nom = nomDeFichier(projet.nom) + '.mp4';
       this._montrerTermine(duree, qualite, resultat.avertissements, secondes);
       annoncer('Ta vidéo est prête.');
+      if (signal) SignalFin.jouer();
     } catch (erreur) {
       if (erreur && erreur.name === 'Annulation') {
         this._etape('reglages');
         this.majReglages();
-        Message.montrer(Reprise.pour(projet)
-          ? 'Fabrication arrêtée. Ce qui est déjà fait est gardé : touche « Reprendre » quand tu veux.'
-          : 'Fabrication arrêtée. Rien n\'a été gardé.');
+        if (this._arretBatterie) {
+          Message.probleme('Batterie faible : la fabrication est en pause, ce qui est fait est gardé. ' +
+            'Branche ta tablette, puis touche « Reprendre ».');
+        } else {
+          Message.montrer(Reprise.pour(projet)
+            ? 'Fabrication arrêtée. Ce qui est déjà fait est gardé : touche « Reprendre » quand tu veux.'
+            : 'Fabrication arrêtée. Rien n\'a été gardé.');
+        }
       } else {
         console.error(erreur);
         this._montrerErreur(erreur);
       }
     } finally {
       this.enCours = false;
+      SignalFin.oublier();   // sans effet si le signal vient d'être joué
       Veille.permettre();
       MiseAJour.majBandeau();   // une mise à jour attendait peut-être la fin
       // L'aperçu reprend là où il était

@@ -126,7 +126,7 @@ const Export = {
         ' : ferme cette fenêtre et touche « Retrouver mes vidéos » en haut de l\'écran.';
     }
     const poids = poidsEstime(duree, qualite);
-    const disque = await DisquePrive.dossier();
+    const disque = await DisquePrive.peutEcrire();
     if (!disque && poids > TAILLE_MAX_EN_MEMOIRE) {
       return 'Sur cette tablette, Omni-Vidéo ne peut fabriquer que des vidéos courtes (environ ' +
         tailleEnTexte(TAILLE_MAX_EN_MEMOIRE) + '). Essaie la qualité 720p, ou découpe ta vidéo en plusieurs parties.';
@@ -151,7 +151,13 @@ const Export = {
     const duree = this._duree();
     const { largeur, hauteur } = tailleExport(f.elements.format.value, qualite);
     ecrireTexte($('#export-resume'), 'Durée : ' + dureeEnMots(duree) + ' · ' + largeur + ' × ' + hauteur + ' · MP4');
-    let texte = 'Fichier d\'environ ' + tailleEnTexte(poidsEstime(duree, qualite)) + '. ';
+    const poids = poidsEstime(duree, qualite);
+    let texte = 'Fichier d\'environ ' + tailleEnTexte(poids) + '. ';
+    // Une grosse vidéo existe deux fois un moment : dans Omni-Vidéo, puis
+    // sa copie dans « Téléchargements » (jusqu'à « Libérer la place »)
+    if (poids > 1024 * 1024 * 1024) {
+      texte += 'Garde environ ' + tailleEnTexte(poids * 2) + ' de libre : la vidéo est fabriquée, puis copiée dans « Téléchargements ». ';
+    }
     const vitesse = Number(lireReglage(CLE_VITESSE + qualite));
     texte += vitesse > 0
       ? 'Temps de fabrication : ' + tempsArrondi(vitesse * duree) + ' (d\'après ta dernière vidéo).'

@@ -268,8 +268,128 @@ const DisquePrive = {
   async effacer() {
     const dossier = await this.dossier();
     if (dossier) await dossier.removeEntry(NOM_FICHIER_EXPORT).catch(() => {});
+  },
+
+  /* Crée le fichier « nom » (vide) et renvoie { poignee, flux } pour
+     l'écrire petit à petit, ou null si la tablette ne sait pas.
+     Deux façons d'écrire :
+     - createWritable(), depuis la page (Chrome sur ordinateur, récent) ;
+     - sinon un travailleur (disque-prive.js) avec createSyncAccessHandle(),
+       ce que Chrome sur Android sait faire. */
+  async ouvrirFichier(nom) {
+    const dossier = await this.dossier();
+    if (!dossier) return null;
+    let poignee;
+    try {
+      await dossier.removeEntry(nom).catch(() => {});
+      poignee = await dossier.getFileHandle(nom, { create: true });
+    } catch (e) {
+      return null;
+    }
+    if (typeof poignee.createWritable === 'function') {
+      try { return { poignee, flux: await poignee.createWritable() }; } catch (e) { /* on essaie l'autre façon */ }
+    }
+    try {
+      return { poignee, flux: await fluxParTravailleur(nom) };
+    } catch (e) {
+      await dossier.removeEntry(nom).catch(() => {});
+      return null;
+    }
+  },
+
+  /* Le disque privé marche-t-il vraiment ? (essai avec un tout petit
+     fichier, fait une seule fois par visite) */
+  peutEcrire() {
+    if (!this._essai) {
+      this._essai = (async () => {
+        const ouvert = await this.ouvrirFichier('omnivideo-test.tmp');
+        if (!ouvert) return false;
+        try {
+          const ecrivain = ouvert.flux.getWriter();
+          await ecrivain.write({ type: 'write', data: new Uint8Array([1, 2, 3]), position: 0 });
+          await ecrivain.close();
+          return (await ouvert.poignee.getFile()).size === 3;
+        } catch (e) {
+          await ouvert.flux.abort().catch(() => {});
+          return false;
+        } finally {
+          const dossier = await this.dossier();
+          if (dossier) await dossier.removeEntry('omnivideo-test.tmp').catch(() => {});
+        }
+      })();
+    }
+    return this._essai;
   }
 };
+
+/* Un flux d'écriture (WritableStream, comme celui de createWritable())
+   qui confie chaque morceau au travailleur disque-prive.js. Il attend que
+   chaque morceau soit écrit avant d'accepter le suivant : la mémoire vive
+   ne garde jamais plus d'un morceau (8 Mo). */
+async function fluxParTravailleur(nom) {
+  const travailleur = new Worker('./disque-prive.js');
+  const attentes = new Map();   // n° du message → sa promesse
+  let numero = 0;
+  let arrete = false;
+  const toutRefuser = (erreur) => {
+    for (const a of attentes.values()) a.echec(erreur);
+    attentes.clear();
+  };
+  travailleur.onmessage = (e) => {
+    const a = attentes.get(e.data.n);
+    if (!a) return;
+    attentes.delete(e.data.n);
+    if (e.data.ok) { a.reussite(); return; }
+    const erreur = new Error(e.data.message);
+    erreur.name = e.data.nom;
+    a.echec(erreur);
+  };
+  travailleur.onerror = (e) => {
+    e.preventDefault();
+    toutRefuser(new Error('Le travailleur du disque privé s\'est arrêté'));
+  };
+  const demander = (message, transfert) => new Promise((reussite, echec) => {
+    if (arrete) { echec(new Error('Fichier déjà fermé')); return; }
+    message.n = ++numero;
+    attentes.set(message.n, { reussite, echec });
+    travailleur.postMessage(message, transfert || []);
+  });
+  // Fermer le fichier (le reste du programme pourra le relire ou l'effacer)
+  const fermer = async () => {
+    if (arrete) return;
+    try {
+      await demander({ type: 'fermer' });
+    } finally {
+      arrete = true;
+      travailleur.terminate();
+      toutRefuser(new Error('Fichier fermé'));
+    }
+  };
+
+  try {
+    await avecDelai(demander({ type: 'ouvrir', nom }), 5000);
+  } catch (e) {
+    arrete = true;
+    travailleur.terminate();
+    throw e;
+  }
+
+  return new WritableStream({
+    // morceau = { type: 'write', data, position }, envoyé par Mediabunny
+    async write(morceau) {
+      const donnees = morceau.data.slice();   // une copie, donnée au travailleur
+      try {
+        await demander({ type: 'ecrire', position: morceau.position, donnees }, [donnees.buffer]);
+      } catch (erreur) {
+        // Le fichier est relâché tout de suite, pour pouvoir l'effacer
+        await fermer().catch(() => {});
+        throw erreur;
+      }
+    },
+    close: fermer,
+    abort: () => fermer().catch(() => {})
+  });
+}
 
 
 /* ---------- Fabriquer la vidéo ----------
@@ -308,19 +428,9 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
   // 2. Où écrire : le disque privé (même une vidéo de 30 minutes), ou la
   //    mémoire vive s'il n'existe pas (vidéos courtes seulement)
   let cible;
-  let poignee = null;
-  let flux = null;
-  const dossier = await DisquePrive.dossier();
-  if (dossier) {
-    try {
-      await dossier.removeEntry(NOM_FICHIER_EXPORT).catch(() => {});
-      poignee = await dossier.getFileHandle(NOM_FICHIER_EXPORT, { create: true });
-      flux = await poignee.createWritable();
-    } catch (e) {
-      poignee = null;
-      flux = null;
-    }
-  }
+  const ouvert = await DisquePrive.ouvrirFichier(NOM_FICHIER_EXPORT);
+  const poignee = ouvert ? ouvert.poignee : null;
+  const flux = ouvert ? ouvert.flux : null;
   if (flux) {
     cible = new Mediabunny.StreamTarget(flux, { chunked: true, chunkSize: 8 * 1024 * 1024 });
   } else {

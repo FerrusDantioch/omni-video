@@ -95,12 +95,15 @@ une musique de fond répétée, fondus au début et à la fin.
 | 15 min | 1080p | 8 min 36 s | 869 Mo | stable |
 | 30 min | 1080p | 16 min 39 s | 1,7 Go | 1,4 Go, stable |
 | 30 min | 720p | 15 min 9 s | 1,1 Go | 1,3 Go, stable |
+| 1 h | 1080p | 33 min 13 s | 3,4 Go | 1,4 Go, stable |
 
 Ce que montrent ces essais :
 
 - **La mémoire ne grossit pas avec la durée** : la vidéo est écrite petit à
   petit sur le disque. La mémoire JavaScript reste sous 31 Mo. Une vidéo de
   30 minutes ne prend pas plus de mémoire qu'une vidéo de 1 minute.
+  L'essai d'une heure (version 1.0.2) a été fait en imitant Chrome sur
+  Android, qui écrit la vidéo par `disque-prive.js`.
 - **La vraie limite est la place libre** : il faut environ 60 Mo par minute
   en 1080p (37 Mo en 720p), et **deux fois** ce poids pendant
   l'enregistrement dans la tablette. Omni-Vidéo vérifie la place avant de
@@ -108,7 +111,7 @@ Ce que montrent ces essais :
   Chrome limite fortement cette place : l'essai de 30 minutes s'y est arrêté
   vers 1,1 Go, avec le message prévu.
 - **Fichiers vérifiés** : bonne durée (au centième de seconde), 30 images
-  par seconde sans image perdue (54 000 images pour 30 minutes), son AAC
+  par seconde sans image perdue (54 000 images pour 30 minutes, 108 000 pour une heure), son AAC
   48 kHz stéréo, image fidèle à l'originale jusqu'à la dernière minute.
 - **Sur la tablette**, la vitesse dépendra de sa puce vidéo : avec elle,
   c'est souvent plus rapide que ci-dessus ; sans elle, plus lent. Omni-Vidéo
@@ -138,6 +141,7 @@ pouvoir les envoyer depuis un téléphone ou une tablette.
 | `audio.js` | La musique de fond et les voix off (lecture avec l'aperçu, enregistrement au micro, onglet « Son ») |
 | `sous-titres.js` | Les sous-titres : lecture des fichiers .srt / .vtt, éditeur, liste, apparence, enregistrement en .srt |
 | `fabrication.js` | La fabrication de la vidéo finale : mélange du son, dessin de chaque image, écriture du MP4 |
+| `disque-prive.js` | Un petit « travailleur » qui écrit la vidéo finale sur la tablette, morceau par morceau (indispensable sur Android pour les vidéos longues) |
 | `export.js` | La fenêtre « Fabriquer la vidéo » : réglages, progression, vidéo prête |
 | `encodeur-aac.js` `encodeur-aac.wasm` | L'encodeur AAC de secours, celui de VisualOn (seulement si la tablette ne sait pas fabriquer le son AAC ; ne pas modifier le .wasm) |
 | `encodeur-aac.c` | La passerelle de l'encodeur AAC, et la recette pour recompiler `encodeur-aac.wasm` |

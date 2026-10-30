@@ -321,18 +321,8 @@ function avecDelai(promesse, ms) {
    écrite petit à petit, sans passer par la mémoire vive. */
 async function testerDisquePrive() {
   try {
-    if (!navigator.storage || !navigator.storage.getDirectory) return false;
-    const dossier = await avecDelai(navigator.storage.getDirectory(), 5000);
-    const fichier = await dossier.getFileHandle('omnivideo-test.tmp', { create: true });
-    if (typeof fichier.createWritable !== 'function') {
-      await dossier.removeEntry('omnivideo-test.tmp').catch(() => {});
-      return false;
-    }
-    const ecriture = await fichier.createWritable();
-    await ecriture.write(new Uint8Array([1, 2, 3]));
-    await ecriture.close();
-    await dossier.removeEntry('omnivideo-test.tmp');
-    return true;
+    // Le même essai que celui de l'export (fabrication.js)
+    return await avecDelai(DisquePrive.peutEcrire(), 10000);
   } catch (e) {
     return false;
   }

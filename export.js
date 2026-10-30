@@ -20,6 +20,7 @@
 
 const CLE_VITESSE = 'omnivideo-vitesse-';   // + qualité : secondes de fabrication par seconde de vidéo
 const CLE_QUALITE = 'omnivideo-qualite';
+const CLE_HARMONISER = 'omnivideo-harmoniser';   // 'non' si la case « volume harmonisé » est décochée
 
 /* Petites aides pour se souvenir de réglages (sans jamais planter si le
    navigateur refuse) */
@@ -90,6 +91,7 @@ const Export = {
     f.elements.format.value = projet.format;
     const qualite = lireReglage(CLE_QUALITE) || '1080p';
     f.elements.qualite.value = avec1080 ? qualite : '720p';
+    $('#export-harmoniser').checked = lireReglage(CLE_HARMONISER) !== 'non';
     $('#fenetre-export input[value="1080p"]').disabled = !avec1080;
     $('#export-sans-1080').hidden = avec1080;
     $('#export-dernier').hidden = true;
@@ -190,6 +192,8 @@ const Export = {
       Incrustations.redessiner(true);
     }
     ecrireReglage(CLE_QUALITE, qualite);
+    const harmoniser = $('#export-harmoniser').checked;
+    ecrireReglage(CLE_HARMONISER, harmoniser ? 'oui' : 'non');
 
     this._arret = { demande: false };
     this._quitte = false;
@@ -206,7 +210,7 @@ const Export = {
     const depart = performance.now();
     const duree = this._duree();
     try {
-      const resultat = await fabriquerVideo(projet, { qualite }, (e) => this._suivi(e), this._arret);
+      const resultat = await fabriquerVideo(projet, { qualite, harmoniser }, (e) => this._suivi(e), this._arret);
       const secondes = (performance.now() - depart) / 1000;
       if (duree >= 20) ecrireReglage(CLE_VITESSE + qualite, String(secondes / duree));
       this._fichier = resultat.fichier;
@@ -241,6 +245,7 @@ const Export = {
     $('#export-barre-remplie').style.width = (e.fait * 100).toFixed(1) + '%';
     $('#export-barre').setAttribute('aria-valuenow', String(pourcent));
     let detail = 'Préparation…';
+    if (e.etape === 'mesure') detail = 'Mesure du volume du son…';
     if (e.etape === 'images') detail = 'Image ' + nombreEnTexte(e.image) + ' sur ' + nombreEnTexte(e.images);
     if (e.etape === 'finition') detail = 'Finition du fichier…';
     if (this._arret && this._arret.demande) detail = 'Arrêt en cours…';

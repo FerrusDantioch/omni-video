@@ -164,6 +164,8 @@ function nettoyerProjet(brut) {
     transitionFin: nettoyerTransition(brut.transitionFin, TYPES_TRANSITION_BORD),
     sousTitres: nettoyerSousTitres(brut.sousTitres),
     styleSousTitres: nettoyerStyleSousTitres(brut.styleSousTitres),
+    // La musique baisse toute seule pendant les voix off (audio.js)
+    baisserMusique: brut.baisserMusique !== false,
     miniature: nettoyerMiniature(brut.miniature),
     chapitres: nettoyerChapitres(brut.chapitres)
   };

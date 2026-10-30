@@ -285,7 +285,7 @@ class Melangeur {
       let ia = Math.max(0, Math.round(piste.debut * FREQUENCE_SON) - e0);
       const ib = Math.min(n, Math.round(finPiste * FREQUENCE_SON) - e0);
       const s = await this._sonDe('piste' + piste.id, media);
-      const gainA = (t) => PistesAudio.volumeA(piste, t, total);
+      const gainA = (t) => PistesAudio.volumeA(piste, t, total, projet);
       // Une musique qui recommence au début pendant cette seconde : en deux fois
       while (ia < ib) {
         const tSortie = (e0 + ia) / FREQUENCE_SON;

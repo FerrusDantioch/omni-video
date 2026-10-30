@@ -434,7 +434,7 @@ const Chronologie = {
     return JSON.stringify({
       clips: p.clips, calques: p.calques, pistes: p.pistes,
       transitionDebut: p.transitionDebut, transitionFin: p.transitionFin,
-      sousTitres: p.sousTitres, styleSousTitres: p.styleSousTitres, chapitres: p.chapitres, t: Lecteur.t
+      sousTitres: p.sousTitres, styleSousTitres: p.styleSousTitres, chapitres: p.chapitres, baisserMusique: p.baisserMusique, t: Lecteur.t
     });
   },
 
@@ -450,6 +450,7 @@ const Chronologie = {
     projet.sousTitres = nettoyerSousTitres(donnees.sousTitres);
     projet.styleSousTitres = nettoyerStyleSousTitres(donnees.styleSousTitres);
     projet.chapitres = nettoyerChapitres(donnees.chapitres);
+    projet.baisserMusique = donnees.baisserMusique !== false;
     this._apresModification(donnees.t);
     Chapitres.afficherListe();
     PistesAudio.afficherListes();

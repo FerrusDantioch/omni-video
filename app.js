@@ -203,6 +203,11 @@ const ACTIONS = {
   'supprimer-chapitre':    (b) => Chapitres.supprimer(b.dataset.id, b),
   'copier-chapitres':      () => Chapitres.copier(),
 
+  // Le guide de la première fois
+  'guide-suivant':         () => Guide.suivant(),
+  'guide-passer':          () => Guide.terminer(),
+  'revoir-guide':          () => Guide.revoir(),
+
   // Fabriquer la vidéo finale
   'ouvrir-export':     () => Export.ouvrir(),
   'export-lancer':     () => Export.lancer(),
@@ -367,6 +372,7 @@ async function demarrer() {
   SousTitres.initialiser();
   Miniature.initialiser();
   Chapitres.initialiser();
+  Guide.initialiser();
   Export.initialiser();
   Installation.initialiser();
 

@@ -39,6 +39,7 @@
 <script defer src="./export.js"></script>
 <script defer src="./sauvegarde.js"></script>
 <script defer src="./youtube.js"></script>
+<script defer src="./guide.js"></script>
 <script defer src="./projets.js"></script>
 <script defer src="./app.js"></script>
 </head>
@@ -768,6 +769,9 @@
          sous-titres, puis fabriquer le fichier MP4 final.</p>
       <p><strong>Application gratuite.</strong> Omni-Vidéo fonctionne sans connexion et sans compte.
          Tes vidéos et tes projets restent sur ta tablette : rien n'est envoyé ailleurs.</p>
+      <button type="button" class="bouton large" data-action="revoir-guide">
+        <svg class="icone" aria-hidden="true"><use href="#i-info"/></svg>Revoir le guide de la première fois
+      </button>
     </div>
 
     <!-- Mention de l'auteur : uniquement le pseudonyme, jamais le vrai nom.
@@ -839,6 +843,20 @@
 </section>
 
 </main>
+
+
+<!-- Le guide de la première fois (voir guide.js) -->
+<div class="guide" id="guide" hidden>
+  <div class="guide-bulle" id="guide-bulle" role="dialog" aria-labelledby="guide-titre" aria-describedby="guide-texte">
+    <p class="etiquette" id="guide-compte"></p>
+    <h2 id="guide-titre"></h2>
+    <p id="guide-texte"></p>
+    <div class="rangee-2">
+      <button type="button" class="bouton" data-action="guide-passer" id="guide-passer">Passer le guide</button>
+      <button type="button" class="bouton bouton-principal" data-action="guide-suivant" id="guide-suivant"><span>Suivant</span></button>
+    </div>
+  </div>
+</div>
 
 
 <!-- ============================ FENÊTRES ============================ -->

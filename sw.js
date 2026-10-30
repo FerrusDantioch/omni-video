@@ -47,6 +47,7 @@ const FICHIERS = [
   './export.js',
   './sauvegarde.js',
   './youtube.js',
+  './guide.js',
   './projets.js',
   './app.js',
   './manifest.json',

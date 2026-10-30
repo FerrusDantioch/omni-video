@@ -1113,6 +1113,30 @@ dialog.fenetre-large { width: min(900px, calc(100vw - 24px)); padding: 18px; }
 .message-flottant.probleme { border-color: var(--danger); }
 .message-flottant.cache { opacity: 0; pointer-events: none; }
 
+/* ---------- Le guide de la première fois (guide.js) ---------- */
+/* Pas de voile : la page reste utilisable, seule la bulle se pose dessus */
+.guide { position: fixed; inset: 0; z-index: 40; pointer-events: none; }
+.guide-bulle {
+  pointer-events: auto;
+  position: fixed;
+  display: grid;
+  gap: 10px;
+  padding: 18px 18px 16px;
+  background: var(--surface-2);
+  color: var(--texte);
+  border: 2px solid var(--accent);
+  border-radius: 14px;
+  box-shadow: 0 10px 32px rgb(0 0 0 / 0.5);
+}
+.guide-bulle h2 { margin: 0; font-size: 1.25rem; }
+.guide-bulle p { margin: 0; }
+/* L'élément montré est entouré d'un épais trait violet */
+.guide-cible {
+  outline: 4px solid var(--accent);
+  outline-offset: 4px;
+  box-shadow: 0 0 24px 6px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
 /* Écran de chargement, affiché avant que l'application ne démarre */
 .chargement { padding: 40px 16px; text-align: center; color: var(--discret); }
 

@@ -102,6 +102,7 @@ const Projets = {
     allerA('projet');
     Onglets.ouvrir('fichiers');
     Chronologie.ouvrir(projet);
+    Guide.peutEtreDemarrer();
   },
 
   /* Appelé quand on quitte l'écran du projet */
@@ -109,6 +110,7 @@ const Projets = {
     if (!this.courant) return;
     this.enregistrerMaintenant();
     if (Enregistreur.enCours) Enregistreur.arreter();
+    if (Guide.etape >= 0) Guide.terminer();
     Visionneuse.fermer();
     Incrustations.fermerEditeur();
     SousTitres.fermerEditeur();

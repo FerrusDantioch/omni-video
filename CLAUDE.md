@@ -60,9 +60,16 @@ README), dans le groupe « Création de contenu ».
   élargit la page sans fin (boucle avec le ResizeObserver).
 - Mesuré : import d'une vidéo de 30 min (915 Mo) en 0,4 s, 18 Mo de mémoire JS.
 - La vidéo finale est écrite petit à petit dans le disque privé du
-  navigateur (OPFS, fichier `omnivideo-export.mp4`) avec `StreamTarget` +
-  `createWritable()`, `fastStart: false`. `BufferTarget` seulement si l'OPFS
-  manque, et pour moins de 300 Mo (`TAILLE_MAX_EN_MEMOIRE`).
+  navigateur (OPFS, fichier `omnivideo-export.mp4`) avec `StreamTarget`,
+  `fastStart: false`, par `DisquePrive.ouvrirFichier()` : `createWritable()`
+  si la page l'a, SINON le travailleur `disque-prive.js`
+  (`createSyncAccessHandle()`, ce que Chrome Android sait faire ;
+  `fluxParTravailleur()` attend chaque morceau de 8 Mo). ⚠️ Sans ce
+  travailleur, Android retombait sur la mémoire vive et refusait toute
+  vidéo de plus de ~5 min (« vidéos courtes », signalé en 1.0.1).
+  `BufferTarget` seulement si aucune des deux ne marche, et pour moins de
+  300 Mo (`TAILLE_MAX_EN_MEMOIRE`). `DisquePrive.peutEcrire()` (essai réel,
+  une fois par visite) sert à l'export ET à « Vérifier ma tablette ».
 
 ## Export (fabrication.js, export.js)
 

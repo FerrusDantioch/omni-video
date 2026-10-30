@@ -138,6 +138,7 @@ pouvoir les envoyer depuis un téléphone ou une tablette.
 | `audio.js` | La musique de fond et les voix off (lecture avec l'aperçu, enregistrement au micro, onglet « Son ») |
 | `sous-titres.js` | Les sous-titres : lecture des fichiers .srt / .vtt, éditeur, liste, apparence, enregistrement en .srt |
 | `fabrication.js` | La fabrication de la vidéo finale : mélange du son, dessin de chaque image, écriture du MP4 |
+| `disque-prive.js` | Un petit « travailleur » qui écrit la vidéo finale sur la tablette, morceau par morceau (indispensable sur Android pour les vidéos longues) |
 | `export.js` | La fenêtre « Fabriquer la vidéo » : réglages, progression, vidéo prête |
 | `encodeur-aac.js` `encodeur-aac.wasm` | L'encodeur AAC de secours, celui de VisualOn (seulement si la tablette ne sait pas fabriquer le son AAC ; ne pas modifier le .wasm) |
 | `encodeur-aac.c` | La passerelle de l'encodeur AAC, et la recette pour recompiler `encodeur-aac.wasm` |

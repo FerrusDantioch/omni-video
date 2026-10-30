@@ -12,7 +12,7 @@
 /* ⚠️ À augmenter d'un cran (v1 → v2…) à CHAQUE modification d'un fichier
    de la liste FICHIERS ci-dessous. Sinon, les tablettes qui ont déjà
    ouvert l'application gardent l'ancienne version. */
-const CACHE = 'omni-video-v2';
+const CACHE = 'omni-video-v3';
 
 /* Le début du nom de cache propre à Omni-Vidéo. Toutes les applications
    de ferrusdantioch.github.io partagent la même adresse de site, donc le
@@ -43,6 +43,7 @@ const FICHIERS = [
   './audio.js',
   './sous-titres.js',
   './fabrication.js',
+  './disque-prive.js',
   './export.js',
   './sauvegarde.js',
   './projets.js',

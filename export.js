@@ -126,7 +126,7 @@ const Export = {
         ' : ferme cette fenêtre et touche « Retrouver mes vidéos » en haut de l\'écran.';
     }
     const poids = poidsEstime(duree, qualite);
-    const disque = await DisquePrive.dossier();
+    const disque = await DisquePrive.peutEcrire();
     if (!disque && poids > TAILLE_MAX_EN_MEMOIRE) {
       return 'Sur cette tablette, Omni-Vidéo ne peut fabriquer que des vidéos courtes (environ ' +
         tailleEnTexte(TAILLE_MAX_EN_MEMOIRE) + '). Essaie la qualité 720p, ou découpe ta vidéo en plusieurs parties.';

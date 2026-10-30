@@ -296,7 +296,13 @@ const Lecteur = {
         continue;
       }
       el.style.opacity = String(v.etat.opacite);
-      el.style.transform = v.etat.decalage ? 'translateX(' + (v.etat.decalage * 100).toFixed(2) + '%)' : '';
+      // Glissement (transition), zoom lent d'une photo, lumière et couleurs
+      const mvt = Montage.mouvement(v.seg, this.t);
+      const dx = v.etat.decalage + mvt.dx;
+      el.style.transform = (dx ? 'translateX(' + (dx * 100).toFixed(2) + '%) ' : '') +
+        (mvt.echelle !== 1 ? 'scale(' + mvt.echelle.toFixed(4) + ')' : '');
+      const filtre = Montage.filtre(v.seg.clip);
+      if (el.style.filter !== filtre) el.style.filter = filtre;
       el.style.zIndex = v.etat.dessus ? '2' : '1';
       if (el.tagName === 'VIDEO') {
         el.volume = borner(v.seg.clip.volume * v.etat.son, 0, 1);

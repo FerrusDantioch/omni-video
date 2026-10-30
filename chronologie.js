@@ -66,6 +66,28 @@ const Chronologie = {
       Projets.modifie();
     });
     curseur.addEventListener('change', () => { this._volumeEnCours = false; });
+
+    // « Lumière et couleurs » : même principe, une étape « Annuler » par glissement
+    $$('[data-reglage-clip]').forEach((c) => {
+      c.addEventListener('input', () => {
+        const cible = this._cible();
+        if (!cible) return;
+        if (!this._volumeEnCours) { this._memoriser(); this._volumeEnCours = true; }
+        cible.seg.clip[c.dataset.reglageClip] = Number(c.value) / 100;
+        Lecteur.appliquerVolume();   // redessine l'aperçu avec le nouveau filtre
+        this._majReglagesImage(cible.seg);
+        Projets.modifie();
+      });
+      c.addEventListener('change', () => { this._volumeEnCours = false; });
+    });
+  },
+
+  _majReglagesImage(seg) {
+    for (const cle of ['lumiere', 'contraste', 'saturation']) {
+      const v = Math.round(seg.clip[cle] * 100);
+      $('#clip-' + cle).value = v;
+      ecrireTexte($('#clip-' + cle + '-valeur'), v + ' %');
+    }
   },
 
   /* « Couper le son » du clip, ou le remettre (à 100 %) */
@@ -409,8 +431,16 @@ const Chronologie = {
       $('#bouton-muet-clip').disabled = Lecteur.enLecture;
       if (!this._volumeEnCours) this._majVolume(seg);
     }
-    // La vitesse : seulement pour une vidéo
+    // La vitesse : seulement pour une vidéo ; le mouvement : seulement pour une photo
     $('#outil-vitesse').hidden = seg.media.type !== 'video';
+    $('#outil-mouvement').hidden = !image;
+    $$('[data-action="mouvement-clip"]', zone).forEach((b) => {
+      b.setAttribute('aria-pressed', String(b.dataset.mouvement === seg.clip.mouvement));
+      b.disabled = Lecteur.enLecture;
+    });
+    $$('[data-reglage-clip]', zone).forEach((c) => { c.disabled = Lecteur.enLecture; });
+    $('[data-action="reglages-clip-origine"]', zone).disabled = Lecteur.enLecture || !Montage.filtre(seg.clip);
+    if (!this._volumeEnCours) this._majReglagesImage(seg);
     $$('[data-action="vitesse-clip"]', zone).forEach((b) => {
       b.setAttribute('aria-pressed', String(Number(b.dataset.vitesse) === Montage.vitesse(seg)));
       b.disabled = Lecteur.enLecture;
@@ -600,6 +630,25 @@ const Chronologie = {
     c.seg.clip.vitesse = vitesse;
     Lecteur.calculer(Projets.courant);
     this._apresModification(Montage.tempsMontage(Lecteur.segments[c.i], c.local));
+  },
+
+  /* Le mouvement d'une photo (zoom lent) */
+  mouvementClip(mouvement) {
+    const c = this._cible();
+    if (!c || c.seg.media.type !== 'image' || !MOUVEMENTS_IMAGE.includes(mouvement)) return;
+    if (c.seg.clip.mouvement === mouvement) return;
+    this._memoriser();
+    c.seg.clip.mouvement = mouvement;
+    this._apresModification(Lecteur.t);
+  },
+
+  /* « Remettre comme l'original » : lumière, contraste et couleurs à 100 % */
+  reglagesOrigine() {
+    const c = this._cible();
+    if (!c || !Montage.filtre(c.seg.clip)) return;
+    this._memoriser();
+    Object.assign(c.seg.clip, { lumiere: 1, contraste: 1, saturation: 1 });
+    this._apresModification(Lecteur.t);
   },
 
   /* Dupliquer le clip : la copie se place juste après lui */

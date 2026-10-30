@@ -35,10 +35,31 @@ const NOMS_TRANSITIONS = {
   glissement: 'Glissement'
 };
 
+const ZOOM_MOUVEMENT = 0.15;   // le zoom lent d'une photo : 15 % au plus
+
 const Montage = {
   /* La vitesse d'un segment (1 = normale ; une image n'a pas de vitesse) */
   vitesse(seg) {
     return seg.media && seg.media.type === 'video' ? seg.clip.vitesse || 1 : 1;
+  },
+
+  /* Le zoom lent d'une photo à l'instant t : { echelle, dx }
+     (dx : décalage horizontal, en largeurs d'image) */
+  mouvement(seg, t) {
+    const m = seg.media && seg.media.type === 'image' ? seg.clip.mouvement : 'aucun';
+    if (!m || m === 'aucun') return { echelle: 1, dx: 0 };
+    const p = borner((t - seg.debut) / Math.max(0.1, seg.fin - seg.debut), 0, 1);
+    if (m === 'zoom-avant') return { echelle: 1 + ZOOM_MOUVEMENT * p, dx: 0 };
+    if (m === 'zoom-arriere') return { echelle: 1 + ZOOM_MOUVEMENT * (1 - p), dx: 0 };
+    // Balayage : l'image, un peu agrandie, glisse de droite à gauche (on la parcourt vers la droite)
+    return { echelle: 1 + ZOOM_MOUVEMENT, dx: (0.5 - p) * ZOOM_MOUVEMENT * 0.9 };
+  },
+
+  /* Lumière, contraste et couleurs d'un clip, en « filtre » (le même pour
+     l'aperçu, en CSS, et pour l'export, sur la toile). '' = rien à changer. */
+  filtre(clip) {
+    if (clip.lumiere === 1 && clip.contraste === 1 && clip.saturation === 1) return '';
+    return 'brightness(' + clip.lumiere + ') contrast(' + clip.contraste + ') saturate(' + clip.saturation + ')';
   },
 
   /* L'instant t de la vidéo finale → le moment à lire DANS le fichier */

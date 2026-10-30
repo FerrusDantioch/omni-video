@@ -314,6 +314,15 @@ const DUREE_IMAGE_DEFAUT = 5;   // secondes d'affichage d'une image ajoutée
 const DUREE_IMAGE_MAX = 600;
 const DUREE_CLIP_MIN = 0.1;     // un clip ne peut pas être plus court
 
+/* Le mouvement d'une photo : rien, zoom vers l'avant ou l'arrière, ou un
+   lent balayage de gauche à droite */
+const MOUVEMENTS_IMAGE = ['aucun', 'zoom-avant', 'zoom-arriere', 'balayage'];
+
+/* Un réglage d'image (lumière, contraste, couleurs) : arrondi au centième */
+function reglageImage(v, min, max) {
+  return Number.isFinite(v) ? Math.round(borner(v, min, max) * 100) / 100 : 1;
+}
+
 /* Les vitesses possibles d'un clip vidéo (1 = normale) */
 const VITESSES_CLIP = [0.5, 0.75, 1, 1.5, 2];
 
@@ -332,6 +341,12 @@ function nettoyerClip(brut, medias) {
     volume: borner(Number.isFinite(brut.volume) ? brut.volume : 1, 0, 1),
     // Ralenti (0,5) ou accéléré (2) : seulement pour une vidéo
     vitesse: media.type === 'video' && VITESSES_CLIP.includes(brut.vitesse) ? brut.vitesse : 1,
+    // Le zoom lent d'une photo (effet « Ken Burns ») : seulement pour une image
+    mouvement: media.type === 'image' && MOUVEMENTS_IMAGE.includes(brut.mouvement) ? brut.mouvement : 'aucun',
+    // Lumière, contraste et couleurs (1 = comme l'original)
+    lumiere: reglageImage(brut.lumiere, 0.5, 1.5),
+    contraste: reglageImage(brut.contraste, 0.5, 1.5),
+    saturation: reglageImage(brut.saturation, 0, 2),
     // La transition qui mène À ce clip depuis le précédent (ignorée pour le premier)
     transition: nettoyerTransition(brut.transition, TYPES_TRANSITION)
   };

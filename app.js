@@ -136,6 +136,8 @@ const ACTIONS = {
   'supprimer-clip':   (b) => Chronologie.supprimerClip(b),
   'dupliquer-clip':   () => Chronologie.dupliquerClip(),
   'vitesse-clip':     (b) => Chronologie.vitesseClip(Number(b.dataset.vitesse)),
+  'mouvement-clip':   (b) => Chronologie.mouvementClip(b.dataset.mouvement),
+  'reglages-clip-origine': () => Chronologie.reglagesOrigine(),
 
   // Onglets, textes et images incrustées
   'onglet':               (b) => Onglets.ouvrir(b.dataset.onglet),

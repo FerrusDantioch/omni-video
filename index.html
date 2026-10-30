@@ -681,6 +681,36 @@
           <svg class="icone" aria-hidden="true"><use href="#i-muet"/></svg><span>Couper le son</span>
         </button>
       </div>
+      <!-- Le zoom lent d'une photo (pas pour une vidéo) -->
+      <div class="outil-mouvement" id="outil-mouvement">
+        <p class="etiquette">Mouvement de la photo</p>
+        <div class="ed-choix" role="group" aria-label="Mouvement de la photo">
+          <button type="button" class="bouton" data-action="mouvement-clip" data-mouvement="aucun">Immobile</button>
+          <button type="button" class="bouton" data-action="mouvement-clip" data-mouvement="zoom-avant">Zoom avant</button>
+          <button type="button" class="bouton" data-action="mouvement-clip" data-mouvement="zoom-arriere">Zoom arrière</button>
+          <button type="button" class="bouton" data-action="mouvement-clip" data-mouvement="balayage">Balayage</button>
+        </div>
+        <p class="aide">Un mouvement lent rend une photo plus vivante.</p>
+      </div>
+      <!-- Lumière et couleurs du clip (vidéo ou photo) -->
+      <details class="ed-section" id="outil-couleurs">
+        <summary>Lumière et couleurs du clip</summary>
+        <div class="ed-contenu">
+          <label class="champ-curseur">Lumière : <span class="mono" id="clip-lumiere-valeur">100 %</span>
+            <input type="range" id="clip-lumiere" data-reglage-clip="lumiere" min="50" max="150" step="5" value="100">
+          </label>
+          <label class="champ-curseur">Contraste : <span class="mono" id="clip-contraste-valeur">100 %</span>
+            <input type="range" id="clip-contraste" data-reglage-clip="contraste" min="50" max="150" step="5" value="100">
+          </label>
+          <label class="champ-curseur">Couleurs : <span class="mono" id="clip-saturation-valeur">100 %</span>
+            <input type="range" id="clip-saturation" data-reglage-clip="saturation" min="0" max="200" step="5" value="100">
+          </label>
+          <p class="aide">Une vidéo filmée un peu sombre : monte la lumière. Couleurs à 0 % : noir et blanc.</p>
+          <button type="button" class="bouton large" data-action="reglages-clip-origine">
+            <svg class="icone" aria-hidden="true"><use href="#i-annuler"/></svg>Remettre comme l'original
+          </button>
+        </div>
+      </details>
     </div>
   </section>
 

@@ -790,6 +790,8 @@ async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouverte
       ctx.save();
       ctx.globalAlpha = etat.opacite;
       if (etat.decalage) ctx.translate(etat.decalage * largeur, 0);
+      const filtre = Montage.filtre(seg.clip);
+      if (filtre) ctx.filter = filtre;
       echantillon.drawWithFit(ctx, { fit: ajustement });
       ctx.restore();
     } else if (seg.media.type === 'image') {
@@ -797,7 +799,13 @@ async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouverte
       if (!img || etat.opacite <= 0) continue;
       ctx.save();
       ctx.globalAlpha = etat.opacite;
-      if (etat.decalage) ctx.translate(etat.decalage * largeur, 0);
+      // Glissement (transition) et zoom lent, autour du centre de l'image
+      const mvt = Montage.mouvement(seg, t);
+      ctx.translate((etat.decalage + mvt.dx) * largeur + largeur / 2, hauteur / 2);
+      ctx.scale(mvt.echelle, mvt.echelle);
+      ctx.translate(-largeur / 2, -hauteur / 2);
+      const filtre = Montage.filtre(seg.clip);
+      if (filtre) ctx.filter = filtre;
       const echelle = ajustement === 'cover'
         ? Math.max(largeur / img.width, hauteur / img.height)
         : Math.min(largeur / img.width, hauteur / img.height);

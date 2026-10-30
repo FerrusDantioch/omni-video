@@ -397,6 +397,7 @@ const Chronologie = {
     $('[data-action="deplacer-clip"][data-sens="-1"]', zone).disabled = i <= 0 || Lecteur.enLecture;
     $('[data-action="deplacer-clip"][data-sens="1"]', zone).disabled = i >= n - 1 || Lecteur.enLecture;
     actif('supprimer-clip', true);
+    actif('dupliquer-clip', true);
     actif('transition-clip', true);
     const image = seg.media.type === 'image';
     $$('.outil-image', zone).forEach((b) => { b.hidden = !image; });
@@ -580,6 +581,20 @@ const Chronologie = {
     const clip = c.seg.clip;
     clip.fin = borner(clip.fin + secondes, clip.debut + 1, DUREE_IMAGE_MAX);
     this._apresModification(Math.min(Lecteur.t, c.seg.debut + (clip.fin - clip.debut) - 0.05));
+  },
+
+  /* Dupliquer le clip : la copie se place juste après lui */
+  dupliquerClip() {
+    const c = this._cible();
+    if (!c) return;
+    this._memoriser();
+    // Comme pour « Couper ici » : pas de transition entre l'original et sa copie
+    const copie = Object.assign({}, c.seg.clip, { id: nouvelId(), transition: nettoyerTransition(null, TYPES_TRANSITION) });
+    Projets.courant.clips.splice(c.i + 1, 0, copie);
+    Lecteur.calculer(Projets.courant);
+    // La ligne va au début de la copie
+    this._apresModification(Lecteur.segments[c.i + 1].debut);
+    Message.montrer('Clip dupliqué ✓ La copie est juste après.');
   },
 
   /* Supprimer le clip (deux appuis ; et « Annuler » le fait revenir) */

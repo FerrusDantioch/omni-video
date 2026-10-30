@@ -134,6 +134,7 @@ const ACTIONS = {
   'deplacer-clip':    (b) => Chronologie.deplacerClip(Number(b.dataset.sens)),
   'duree-image':      (b) => Chronologie.dureeImage(Number(b.dataset.secondes)),
   'supprimer-clip':   (b) => Chronologie.supprimerClip(b),
+  'dupliquer-clip':   () => Chronologie.dupliquerClip(),
 
   // Onglets, textes et images incrustées
   'onglet':               (b) => Onglets.ouvrir(b.dataset.onglet),
@@ -158,6 +159,7 @@ const ACTIONS = {
     if (c) Incrustations.changer('duree', c.duree + Number(b.dataset.secondes));
   },
   'supprimer-calque':     (b) => Incrustations.supprimer(b),
+  'dupliquer-calque':     () => Incrustations.dupliquer(),
 
   // Son : musique de fond, voix off, son des clips
   'choisir-musique':      () => PistesAudio.montrerChoixMusiques(),

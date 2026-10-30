@@ -27,6 +27,14 @@ const FONDUS_PISTE = {
 };
 const ECART_MAX_AUDIO = 0.25;   // au-delà de ce décalage (secondes), on recale le lecteur audio
 
+/* La musique baisse toute seule pendant les voix off (si la case est
+   cochée, projet.baisserMusique) : elle descend à 30 % de son volume
+   (environ −10 dB) un peu AVANT que la voix commence, et remonte en
+   douceur juste après. */
+const MUSIQUE_SOUS_VOIX = 0.3;
+const BAISSE_AVANT_VOIX = 0.3;    // secondes pour descendre
+const REMONTEE_APRES_VOIX = 0.8;  // secondes pour remonter
+
 
 const PistesAudio = {
   _lecteurs: new Map(),   // numéro de piste → lecteur <audio>
@@ -56,6 +64,7 @@ const PistesAudio = {
       ecrireTexte(e.target.closest('label').querySelector('.mono'), e.target.value + ' %');
     });
     zone.addEventListener('change', (e) => {
+      if (e.target.id === 'baisser-musique') { this.changerBaisse(e.target.checked); return; }
       if (e.target.dataset.pisteVolume) { this._volumeEnCours = false; return; }
       const id = e.target.dataset.pisteFin;
       if (!id) return;
@@ -79,8 +88,9 @@ const PistesAudio = {
     return piste.duree;
   },
 
-  /* Le volume d'une piste à l'instant t, fondus compris (0 à 1) */
-  volumeA(piste, t, dureeMontage) {
+  /* Le volume d'une piste à l'instant t, fondus compris (0 à 1).
+     Sert à l'aperçu ET à la vidéo finale (fabrication.js). */
+  volumeA(piste, t, dureeMontage, projetDonne) {
     const duree = this.duree(piste, dureeMontage);
     const f = FONDUS_PISTE[piste.type];
     const depuis = t - piste.debut;
@@ -88,7 +98,28 @@ const PistesAudio = {
     let v = piste.volume;
     if (depuis < f.entree) v *= borner(depuis / f.entree, 0, 1);
     if (reste < f.sortie) v *= borner(reste / f.sortie, 0, 1);
+    if (piste.type === 'musique') v *= this.baisseSousVoix(projetDonne || Projets.courant, t, dureeMontage);
     return v;
+  },
+
+  /* 1 = musique à son volume normal ; MUSIQUE_SOUS_VOIX = une voix parle */
+  baisseSousVoix(projet, t, dureeMontage) {
+    if (!projet || !projet.baisserMusique) return 1;
+    let presence = 0;   // 0 = aucune voix, 1 = une voix parle
+    for (const voix of projet.pistes) {
+      if (voix.type !== 'voix') continue;
+      const media = projet.medias.find((m) => m.id === voix.mediaId);
+      // La voix s'arrête à la fin de son enregistrement, même si sa place est plus longue
+      let fin = voix.debut + this.duree(voix, dureeMontage);
+      if (media && media.duree > 0) fin = Math.min(fin, voix.debut + media.duree);
+      let p = 0;
+      if (t >= voix.debut && t < fin) p = 1;
+      else if (t < voix.debut) p = 1 - (voix.debut - t) / BAISSE_AVANT_VOIX;
+      else p = 1 - (t - fin) / REMONTEE_APRES_VOIX;
+      presence = Math.max(presence, borner(p, 0, 1));
+      if (presence >= 1) break;
+    }
+    return 1 - (1 - MUSIQUE_SOUS_VOIX) * presence;
   },
 
   /* L'endroit à lire DANS le fichier à l'instant t (une musique plus
@@ -265,6 +296,17 @@ const PistesAudio = {
     $('#liste-voix').innerHTML = voix.map(carte).join('');
     $('#musiques-vide').hidden = musiques.length > 0;
     $('#voix-vide').hidden = voix.length > 0;
+    $('#baisser-musique').checked = projet.baisserMusique;
+  },
+
+  /* La case « Baisser la musique pendant les voix off » */
+  changerBaisse(oui) {
+    const projet = Projets.courant;
+    if (!projet) return;
+    Chronologie._memoriser();
+    projet.baisserMusique = oui;
+    Projets.modifie();
+    this.synchroniser();
   },
 
   /* « Ajouter une musique de fond » : on choisit parmi les musiques de « Mes fichiers » */

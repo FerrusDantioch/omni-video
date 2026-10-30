@@ -66,6 +66,28 @@ const Chronologie = {
       Projets.modifie();
     });
     curseur.addEventListener('change', () => { this._volumeEnCours = false; });
+
+    // « Lumière et couleurs » : même principe, une étape « Annuler » par glissement
+    $$('[data-reglage-clip]').forEach((c) => {
+      c.addEventListener('input', () => {
+        const cible = this._cible();
+        if (!cible) return;
+        if (!this._volumeEnCours) { this._memoriser(); this._volumeEnCours = true; }
+        cible.seg.clip[c.dataset.reglageClip] = Number(c.value) / 100;
+        Lecteur.appliquerVolume();   // redessine l'aperçu avec le nouveau filtre
+        this._majReglagesImage(cible.seg);
+        Projets.modifie();
+      });
+      c.addEventListener('change', () => { this._volumeEnCours = false; });
+    });
+  },
+
+  _majReglagesImage(seg) {
+    for (const cle of ['lumiere', 'contraste', 'saturation']) {
+      const v = Math.round(seg.clip[cle] * 100);
+      $('#clip-' + cle).value = v;
+      ecrireTexte($('#clip-' + cle + '-valeur'), v + ' %');
+    }
   },
 
   /* « Couper le son » du clip, ou le remettre (à 100 %) */
@@ -133,6 +155,8 @@ const Chronologie = {
     for (let s = 0; s <= duree + 0.001; s += pas) {
       regle += '<span class="chrono-repere" style="left:' + Math.round(this._marge + s * this.pps) + 'px">' + formaterDuree(s) + '</span>';
     }
+    // Les chapitres YouTube : un petit drapeau dans la règle
+    regle += Chapitres.reperes(projet, this._marge, this.pps);
     $('#chrono-regle').innerHTML = regle;
 
     // Les clips
@@ -395,6 +419,7 @@ const Chronologie = {
     $('[data-action="deplacer-clip"][data-sens="-1"]', zone).disabled = i <= 0 || Lecteur.enLecture;
     $('[data-action="deplacer-clip"][data-sens="1"]', zone).disabled = i >= n - 1 || Lecteur.enLecture;
     actif('supprimer-clip', true);
+    actif('dupliquer-clip', true);
     actif('transition-clip', true);
     const image = seg.media.type === 'image';
     $$('.outil-image', zone).forEach((b) => { b.hidden = !image; });
@@ -406,10 +431,26 @@ const Chronologie = {
       $('#bouton-muet-clip').disabled = Lecteur.enLecture;
       if (!this._volumeEnCours) this._majVolume(seg);
     }
+    // La vitesse : seulement pour une vidéo ; le mouvement : seulement pour une photo
+    $('#outil-vitesse').hidden = seg.media.type !== 'video';
+    $('#outil-mouvement').hidden = !image;
+    $$('[data-action="mouvement-clip"]', zone).forEach((b) => {
+      b.setAttribute('aria-pressed', String(b.dataset.mouvement === seg.clip.mouvement));
+      b.disabled = Lecteur.enLecture;
+    });
+    $$('[data-reglage-clip]', zone).forEach((c) => { c.disabled = Lecteur.enLecture; });
+    $('[data-action="reglages-clip-origine"]', zone).disabled = Lecteur.enLecture || !Montage.filtre(seg.clip);
+    if (!this._volumeEnCours) this._majReglagesImage(seg);
+    $$('[data-action="vitesse-clip"]', zone).forEach((b) => {
+      b.setAttribute('aria-pressed', String(Number(b.dataset.vitesse) === Montage.vitesse(seg)));
+      b.disabled = Lecteur.enLecture;
+    });
     if (image) $('[data-action="duree-image"][data-secondes="-1"]', zone).disabled = seg.fin - seg.debut <= 1.05 || Lecteur.enLecture;
 
+    const vitesse = Montage.vitesse(seg);
     ecrireTexte($('#outils-titre'), 'Clip ' + (i + 1) + ' sur ' + n + ' · ' + seg.media.nom + ' · ' +
-      dureeEnMots(seg.fin - seg.debut) + (Lecteur.enLecture ? ' — mets en pause pour modifier' : ''));
+      dureeEnMots(seg.fin - seg.debut) + (vitesse !== 1 ? ' · vitesse ×' + String(vitesse).replace('.', ',') : '') +
+      (Lecteur.enLecture ? ' — mets en pause pour modifier' : ''));
   },
 
   majBoutonsHistorique() {
@@ -432,7 +473,7 @@ const Chronologie = {
     return JSON.stringify({
       clips: p.clips, calques: p.calques, pistes: p.pistes,
       transitionDebut: p.transitionDebut, transitionFin: p.transitionFin,
-      sousTitres: p.sousTitres, styleSousTitres: p.styleSousTitres, t: Lecteur.t
+      sousTitres: p.sousTitres, styleSousTitres: p.styleSousTitres, chapitres: p.chapitres, baisserMusique: p.baisserMusique, t: Lecteur.t
     });
   },
 
@@ -447,7 +488,10 @@ const Chronologie = {
     projet.transitionFin = nettoyerTransition(donnees.transitionFin, TYPES_TRANSITION_BORD);
     projet.sousTitres = nettoyerSousTitres(donnees.sousTitres);
     projet.styleSousTitres = nettoyerStyleSousTitres(donnees.styleSousTitres);
+    projet.chapitres = nettoyerChapitres(donnees.chapitres);
+    projet.baisserMusique = donnees.baisserMusique !== false;
     this._apresModification(donnees.t);
+    Chapitres.afficherListe();
     PistesAudio.afficherListes();
     PistesAudio.synchroniser();
     // L'éditeur ouvert suit (ou se ferme si son calque n'existe plus)
@@ -500,7 +544,7 @@ const Chronologie = {
     const seg = Lecteur.segmentCourant();
     if (!seg || Lecteur.enLecture) return null;
     const i = Lecteur.segments.indexOf(seg);
-    return { seg, i, local: seg.clip.debut + (Lecteur.t - seg.debut) };
+    return { seg, i, local: Montage.tempsFichier(seg, Lecteur.t) };
   },
 
   /* Ajoute un fichier (vidéo entière ou image) à la fin de la vidéo */
@@ -575,6 +619,50 @@ const Chronologie = {
     const clip = c.seg.clip;
     clip.fin = borner(clip.fin + secondes, clip.debut + 1, DUREE_IMAGE_MAX);
     this._apresModification(Math.min(Lecteur.t, c.seg.debut + (clip.fin - clip.debut) - 0.05));
+  },
+
+  /* Ralenti / accéléré : la ligne violette reste sur la même image */
+  vitesseClip(vitesse) {
+    const c = this._cible();
+    if (!c || c.seg.media.type !== 'video' || !VITESSES_CLIP.includes(vitesse)) return;
+    if (Montage.vitesse(c.seg) === vitesse) return;
+    this._memoriser();
+    c.seg.clip.vitesse = vitesse;
+    Lecteur.calculer(Projets.courant);
+    this._apresModification(Montage.tempsMontage(Lecteur.segments[c.i], c.local));
+  },
+
+  /* Le mouvement d'une photo (zoom lent) */
+  mouvementClip(mouvement) {
+    const c = this._cible();
+    if (!c || c.seg.media.type !== 'image' || !MOUVEMENTS_IMAGE.includes(mouvement)) return;
+    if (c.seg.clip.mouvement === mouvement) return;
+    this._memoriser();
+    c.seg.clip.mouvement = mouvement;
+    this._apresModification(Lecteur.t);
+  },
+
+  /* « Remettre comme l'original » : lumière, contraste et couleurs à 100 % */
+  reglagesOrigine() {
+    const c = this._cible();
+    if (!c || !Montage.filtre(c.seg.clip)) return;
+    this._memoriser();
+    Object.assign(c.seg.clip, { lumiere: 1, contraste: 1, saturation: 1 });
+    this._apresModification(Lecteur.t);
+  },
+
+  /* Dupliquer le clip : la copie se place juste après lui */
+  dupliquerClip() {
+    const c = this._cible();
+    if (!c) return;
+    this._memoriser();
+    // Comme pour « Couper ici » : pas de transition entre l'original et sa copie
+    const copie = Object.assign({}, c.seg.clip, { id: nouvelId(), transition: nettoyerTransition(null, TYPES_TRANSITION) });
+    Projets.courant.clips.splice(c.i + 1, 0, copie);
+    Lecteur.calculer(Projets.courant);
+    // La ligne va au début de la copie
+    this._apresModification(Lecteur.segments[c.i + 1].debut);
+    Message.montrer('Clip dupliqué ✓ La copie est juste après.');
   },
 
   /* Supprimer le clip (deux appuis ; et « Annuler » le fait revenir) */

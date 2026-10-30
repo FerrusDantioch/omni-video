@@ -6,7 +6,7 @@
    OMNI-VIDÉO — incrustations.js
    Les textes et les images posés par-dessus la vidéo (les « calques »).
    - Les onglets du panneau de droite : Mes fichiers, Textes, Images,
-     Son, Sous-titres.
+     Son, Sous-titres, YouTube.
    - La liste des textes et des images incrustées.
    - L'éditeur : le texte, la police, la taille, la couleur, le style,
      la place dans l'image et le moment où il apparaît.
@@ -48,6 +48,7 @@ const Onglets = {
     if (nom === 'textes' || nom === 'images') Incrustations.afficherListes();
     if (nom === 'son') PistesAudio.afficherListes();
     if (nom === 'sous-titres') SousTitres.afficherListe();
+    if (nom === 'youtube') { Miniature.afficher(); Chapitres.afficherListe(); }
   }
 };
 
@@ -308,6 +309,7 @@ const Incrustations = {
     const total = Lecteur.duree();
     $('#ed-avertissement').hidden = !(total > 0 && c.debut >= total);
     $('[data-action="supprimer-calque"] span').textContent = texte ? 'Supprimer ce texte' : 'Supprimer cette image';
+    $('[data-action="dupliquer-calque"] span').textContent = texte ? 'Dupliquer ce texte' : 'Dupliquer cette image';
   },
 
   /* Avant le premier changement d'une séance de modification, on garde
@@ -353,6 +355,27 @@ const Incrustations = {
     this.changer('duree', Lecteur.t - c.debut);
     // La ligne revient un peu avant la fin, pour que le calque reste visible
     Lecteur.aller(Math.max(c.debut, c.debut + c.duree - 0.1));
+  },
+
+  /* Dupliquer le texte ou l'image : la copie garde tous les réglages. Elle
+     se place à la ligne violette si la ligne est ailleurs, sinon juste
+     après l'original. */
+  dupliquer() {
+    const c = this.calque(this.edite);
+    if (!c) return;
+    const projet = Projets.courant;
+    const dedans = Lecteur.t >= c.debut && Lecteur.t < c.debut + c.duree;
+    Chronologie._memoriser();
+    const copie = nettoyerCalque(Object.assign({}, c, { id: nouvelId(), debut: dedans ? c.debut + c.duree : Lecteur.t }), projet.medias);
+    if (!copie) return;
+    projet.calques.push(copie);
+    Projets.modifie();
+    Chronologie.majBoutonsHistorique();
+    Chronologie.dessiner();
+    Lecteur.aller(copie.debut);
+    this.ouvrirEditeur(copie.id, true);
+    Message.montrer((c.type === 'texte' ? 'Texte dupliqué' : 'Image dupliquée') + ' ✓ Tu modifies maintenant la copie, à ' +
+      formaterPosition(copie.debut) + '.');
   },
 
   supprimer(bouton) {

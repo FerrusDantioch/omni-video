@@ -21,6 +21,10 @@
    - glissement : le clip suivant arrive par la droite et pousse le
                   précédent vers la gauche (les deux se chevauchent).
    Le son suit : il baisse et monte en même temps que l'image.
+
+   Un clip peut être ralenti ou accéléré (clip.vitesse) : sa place dans la
+   vidéo finale change, et tempsFichier() / tempsMontage() font le lien
+   entre le temps de la vidéo finale et celui du fichier.
    ============================================================ */
 'use strict';
 
@@ -31,7 +35,43 @@ const NOMS_TRANSITIONS = {
   glissement: 'Glissement'
 };
 
+const ZOOM_MOUVEMENT = 0.15;   // le zoom lent d'une photo : 15 % au plus
+
 const Montage = {
+  /* La vitesse d'un segment (1 = normale ; une image n'a pas de vitesse) */
+  vitesse(seg) {
+    return seg.media && seg.media.type === 'video' ? seg.clip.vitesse || 1 : 1;
+  },
+
+  /* Le zoom lent d'une photo à l'instant t : { echelle, dx }
+     (dx : décalage horizontal, en largeurs d'image) */
+  mouvement(seg, t) {
+    const m = seg.media && seg.media.type === 'image' ? seg.clip.mouvement : 'aucun';
+    if (!m || m === 'aucun') return { echelle: 1, dx: 0 };
+    const p = borner((t - seg.debut) / Math.max(0.1, seg.fin - seg.debut), 0, 1);
+    if (m === 'zoom-avant') return { echelle: 1 + ZOOM_MOUVEMENT * p, dx: 0 };
+    if (m === 'zoom-arriere') return { echelle: 1 + ZOOM_MOUVEMENT * (1 - p), dx: 0 };
+    // Balayage : l'image, un peu agrandie, glisse de droite à gauche (on la parcourt vers la droite)
+    return { echelle: 1 + ZOOM_MOUVEMENT, dx: (0.5 - p) * ZOOM_MOUVEMENT * 0.9 };
+  },
+
+  /* Lumière, contraste et couleurs d'un clip, en « filtre » (le même pour
+     l'aperçu, en CSS, et pour l'export, sur la toile). '' = rien à changer. */
+  filtre(clip) {
+    if (clip.lumiere === 1 && clip.contraste === 1 && clip.saturation === 1) return '';
+    return 'brightness(' + clip.lumiere + ') contrast(' + clip.contraste + ') saturate(' + clip.saturation + ')';
+  },
+
+  /* L'instant t de la vidéo finale → le moment à lire DANS le fichier */
+  tempsFichier(seg, t) {
+    return seg.clip.debut + (t - seg.debut) * this.vitesse(seg);
+  },
+
+  /* L'inverse : un moment du fichier → l'instant de la vidéo finale */
+  tempsMontage(seg, local) {
+    return seg.debut + (local - seg.clip.debut) / this.vitesse(seg);
+  },
+
   /* La place de chaque clip dans la vidéo finale.
      Une transition ne peut pas durer plus de la moitié de chacun des deux
      clips : ainsi, jamais plus de deux clips ne se chevauchent. */
@@ -39,7 +79,8 @@ const Montage = {
     const liste = [];
     projet.clips.forEach((clip, i) => {
       const media = projet.medias.find((m) => m.id === clip.mediaId);
-      const longueur = clip.fin - clip.debut;
+      // Un clip ralenti dure plus longtemps dans la vidéo finale, un clip accéléré moins
+      const longueur = (clip.fin - clip.debut) / (clip.vitesse || 1);
       let transition = null;
       let chevauchement = 0;
       if (i > 0 && clip.transition && clip.transition.type !== 'aucune') {

@@ -12,7 +12,7 @@
 
 /* Numéro de version affiché dans « À propos ». À changer à chaque
    nouvelle version publiée. */
-const VERSION = '1.0.2';
+const VERSION = '1.1.0';
 
 /* ---------- 1. Navigation entre les écrans ----------
    Chaque écran est une <section class="vue" data-vue="…">.
@@ -134,6 +134,10 @@ const ACTIONS = {
   'deplacer-clip':    (b) => Chronologie.deplacerClip(Number(b.dataset.sens)),
   'duree-image':      (b) => Chronologie.dureeImage(Number(b.dataset.secondes)),
   'supprimer-clip':   (b) => Chronologie.supprimerClip(b),
+  'dupliquer-clip':   () => Chronologie.dupliquerClip(),
+  'vitesse-clip':     (b) => Chronologie.vitesseClip(Number(b.dataset.vitesse)),
+  'mouvement-clip':   (b) => Chronologie.mouvementClip(b.dataset.mouvement),
+  'reglages-clip-origine': () => Chronologie.reglagesOrigine(),
 
   // Onglets, textes et images incrustées
   'onglet':               (b) => Onglets.ouvrir(b.dataset.onglet),
@@ -158,6 +162,7 @@ const ACTIONS = {
     if (c) Incrustations.changer('duree', c.duree + Number(b.dataset.secondes));
   },
   'supprimer-calque':     (b) => Incrustations.supprimer(b),
+  'dupliquer-calque':     () => Incrustations.dupliquer(),
 
   // Son : musique de fond, voix off, son des clips
   'choisir-musique':      () => PistesAudio.montrerChoixMusiques(),
@@ -189,12 +194,28 @@ const ACTIONS = {
   'decaler-sous-titres':       (b) => SousTitres.decaler(Number(b.dataset.secondes)),
   'enregistrer-srt':           () => SousTitres.enregistrerSrt(),
 
+  // Onglet « YouTube » : miniature et chapitres
+  'miniature-image':       () => Miniature.prendreImage(),
+  'miniature-reglage':     (b) => Miniature.changer(b.dataset.reglage, b.dataset.valeur),
+  'miniature-enregistrer': () => Miniature.enregistrer(),
+  'ajouter-chapitre':      () => Chapitres.ajouter(),
+  'aller-chapitre':        (b) => Chapitres.aller(b.dataset.id),
+  'supprimer-chapitre':    (b) => Chapitres.supprimer(b.dataset.id, b),
+  'copier-chapitres':      () => Chapitres.copier(),
+
+  // Le guide de la première fois
+  'guide-suivant':         () => Guide.suivant(),
+  'guide-passer':          () => Guide.terminer(),
+  'revoir-guide':          () => Guide.revoir(),
+  'inserer-projet':        (b) => IntroFin.inserer(b.dataset.id, b.dataset.place),
+
   // Fabriquer la vidéo finale
   'ouvrir-export':     () => Export.ouvrir(),
   'export-lancer':     () => Export.lancer(),
   'export-arreter':    (b) => Export.arreter(b),
   'export-enregistrer': () => Export.enregistrer(),
   'export-partager':   () => Export.partager(),
+  'export-recommencer': (b) => Export.recommencer(b),
   'export-liberer':    (b) => Export.liberer(b),
   'export-retrouver':  () => Export.retrouver(),
   'export-reglages':   () => Export.ouvrir()
@@ -351,6 +372,10 @@ async function demarrer() {
   Incrustations.initialiser();
   PistesAudio.initialiser();
   SousTitres.initialiser();
+  Miniature.initialiser();
+  Chapitres.initialiser();
+  Guide.initialiser();
+  IntroFin.initialiser();
   Export.initialiser();
   Installation.initialiser();
 

@@ -102,6 +102,7 @@ const Projets = {
     allerA('projet');
     Onglets.ouvrir('fichiers');
     Chronologie.ouvrir(projet);
+    Guide.peutEtreDemarrer();
   },
 
   /* Appelé quand on quitte l'écran du projet */
@@ -109,6 +110,7 @@ const Projets = {
     if (!this.courant) return;
     this.enregistrerMaintenant();
     if (Enregistreur.enCours) Enregistreur.arreter();
+    if (Guide.etape >= 0) Guide.terminer();
     Visionneuse.fermer();
     Incrustations.fermerEditeur();
     SousTitres.fermerEditeur();
@@ -116,6 +118,7 @@ const Projets = {
     PistesAudio.vider();
     this.courant = null;
     Rendu.oublierImages();
+    Miniature.oublier();
     Incrustations.redessiner(true);
   },
 
@@ -213,6 +216,8 @@ const Projets = {
     if (!$('#etat-sauvegarde').textContent) ecrireTexte($('#etat-sauvegarde'), 'Enregistré ✓');
     this.afficherManquantes();
     this.afficherMedias();
+    // L'onglet YouTube suit (forme changée, vidéos retrouvées…)
+    if (Onglets.actif === 'youtube') Miniature.afficher();
   },
 
   afficherManquantes() {

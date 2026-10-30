@@ -163,8 +163,50 @@ function nettoyerProjet(brut) {
     transitionDebut: nettoyerTransition(brut.transitionDebut, TYPES_TRANSITION_BORD),
     transitionFin: nettoyerTransition(brut.transitionFin, TYPES_TRANSITION_BORD),
     sousTitres: nettoyerSousTitres(brut.sousTitres),
-    styleSousTitres: nettoyerStyleSousTitres(brut.styleSousTitres)
+    styleSousTitres: nettoyerStyleSousTitres(brut.styleSousTitres),
+    // La musique baisse toute seule pendant les voix off (audio.js)
+    baisserMusique: brut.baisserMusique !== false,
+    miniature: nettoyerMiniature(brut.miniature),
+    chapitres: nettoyerChapitres(brut.chapitres)
   };
+}
+
+/* La miniature YouTube (onglet « YouTube », voir youtube.js) :
+   - t : le moment de la vidéo dont on prend l'image (null = pas encore choisi)
+   - texte : le titre écrit en gros par-dessus
+   - couleur, place (haut, centre, bas), taille (normale, grande, enorme) */
+const PLACES_MINIATURE = ['haut', 'centre', 'bas'];
+const TAILLES_MINIATURE = ['normale', 'grande', 'enorme'];
+
+function nettoyerMiniature(brut) {
+  const m = brut && typeof brut === 'object' ? brut : {};
+  return {
+    t: Number.isFinite(m.t) && m.t >= 0 ? m.t : null,
+    texte: typeof m.texte === 'string' ? m.texte.slice(0, 80) : '',
+    couleur: typeof m.couleur === 'string' && /^#[0-9a-f]{6}$/i.test(m.couleur) ? m.couleur : '#ffd84d',
+    place: PLACES_MINIATURE.includes(m.place) ? m.place : 'bas',
+    taille: TAILLES_MINIATURE.includes(m.taille) ? m.taille : 'grande'
+  };
+}
+
+/* Les chapitres YouTube : [{ id, t, titre }], t en secondes ENTIÈRES de
+   la vidéo finale (YouTube ne compte pas les dixièmes), toujours rangés
+   dans l'ordre du temps, jamais deux au même moment. */
+const CHAPITRES_MAX = 100;
+
+function nettoyerChapitres(liste) {
+  if (!Array.isArray(liste)) return [];
+  const vus = new Set();
+  return liste
+    .filter((c) => c && typeof c.id === 'string' && Number.isFinite(c.t))
+    .map((c) => ({
+      id: c.id,
+      t: Math.max(0, Math.min(DUREE_CALQUE_MAX, Math.round(c.t))),
+      titre: typeof c.titre === 'string' ? c.titre.slice(0, 100) : ''
+    }))
+    .sort((a, b) => a.t - b.t)
+    .filter((c) => { if (vus.has(c.t)) return false; vus.add(c.t); return true; })
+    .slice(0, CHAPITRES_MAX);
 }
 
 /* Les sous-titres : ce qui est dit, écrit en bas de l'image.
@@ -272,6 +314,18 @@ const DUREE_IMAGE_DEFAUT = 5;   // secondes d'affichage d'une image ajoutée
 const DUREE_IMAGE_MAX = 600;
 const DUREE_CLIP_MIN = 0.1;     // un clip ne peut pas être plus court
 
+/* Le mouvement d'une photo : rien, zoom vers l'avant ou l'arrière, ou un
+   lent balayage de gauche à droite */
+const MOUVEMENTS_IMAGE = ['aucun', 'zoom-avant', 'zoom-arriere', 'balayage'];
+
+/* Un réglage d'image (lumière, contraste, couleurs) : arrondi au centième */
+function reglageImage(v, min, max) {
+  return Number.isFinite(v) ? Math.round(borner(v, min, max) * 100) / 100 : 1;
+}
+
+/* Les vitesses possibles d'un clip vidéo (1 = normale) */
+const VITESSES_CLIP = [0.5, 0.75, 1, 1.5, 2];
+
 function nettoyerClip(brut, medias) {
   if (!brut || typeof brut !== 'object' || typeof brut.id !== 'string') return null;
   const media = medias.find((m) => m.id === brut.mediaId);
@@ -285,6 +339,14 @@ function nettoyerClip(brut, medias) {
     debut,
     fin,
     volume: borner(Number.isFinite(brut.volume) ? brut.volume : 1, 0, 1),
+    // Ralenti (0,5) ou accéléré (2) : seulement pour une vidéo
+    vitesse: media.type === 'video' && VITESSES_CLIP.includes(brut.vitesse) ? brut.vitesse : 1,
+    // Le zoom lent d'une photo (effet « Ken Burns ») : seulement pour une image
+    mouvement: media.type === 'image' && MOUVEMENTS_IMAGE.includes(brut.mouvement) ? brut.mouvement : 'aucun',
+    // Lumière, contraste et couleurs (1 = comme l'original)
+    lumiere: reglageImage(brut.lumiere, 0.5, 1.5),
+    contraste: reglageImage(brut.contraste, 0.5, 1.5),
+    saturation: reglageImage(brut.saturation, 0, 2),
     // La transition qui mène À ce clip depuis le précédent (ignorée pour le premier)
     transition: nettoyerTransition(brut.transition, TYPES_TRANSITION)
   };

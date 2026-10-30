@@ -172,13 +172,15 @@ class SourceSon {
      - de la case ia à la case ib (exclue) des tableaux ;
      - tSortie : le moment de la case ia dans la vidéo finale ;
      - tSource : le moment correspondant DANS le fichier ;
-     - gainA(t) : le volume au moment t de la vidéo finale. */
-  async ajouter(gauche, droite, ia, ib, tSortie, tSource, gainA) {
+     - gainA(t) : le volume au moment t de la vidéo finale ;
+     - vitesse : 2 = le fichier est lu deux fois plus vite (son plus aigu). */
+  async ajouter(gauche, droite, ia, ib, tSortie, tSource, gainA, vitesse) {
     if (this.muet || ib <= ia) return;
     const fr = this.frequence;
     const n = ib - ia;
+    const vit = vitesse || 1;
     const f0 = Math.floor(tSource * fr);
-    const f1 = Math.ceil((tSource + n / FREQUENCE_SON) * fr) + 2;
+    const f1 = Math.ceil((tSource + n * vit / FREQUENCE_SON) * fr) + 2;
     await this._charger(f0, f1);
 
     // On recopie d'abord ces échantillons dans deux tableaux continus
@@ -195,7 +197,7 @@ class SourceSon {
     // Puis on les ajoute au mélange, en ajustant la fréquence et le volume.
     // Le volume est calculé tous les 128 échantillons (moins de 3 millièmes
     // de seconde) et glisse en douceur entre deux calculs.
-    const pas = fr / FREQUENCE_SON;
+    const pas = fr / FREQUENCE_SON * vit;
     const depart = tSource * fr - f0;
     const BLOC = 128;
     for (let k0 = 0; k0 < n; k0 += BLOC) {
@@ -218,6 +220,218 @@ class SourceSon {
     try { if (this.lecture) await this.lecture.return(); } catch (e) { /* déjà fermé */ }
     if (this.entree) this.entree.dispose();
     this.morceaux = [];
+  }
+}
+
+
+/* ---------- Le mélange du son ----------
+   Mélange, seconde après seconde, le son des clips vidéo, la musique de
+   fond et les voix off, avec leurs volumes et leurs fondus (les mêmes
+   calculs que l'aperçu). Quand le volume est harmonisé, on s'en sert deux
+   fois : d'abord pour mesurer le volume, puis pour fabriquer la vidéo. */
+class Melangeur {
+  constructor(projet, segments, total, avertissements) {
+    this.projet = projet;
+    this.segments = segments;
+    this.total = total;
+    this.avertissements = avertissements;
+    this.sons = new Map();   // n° de segment ou de piste → SourceSon
+    this.echantillon = 0;    // le prochain échantillon à fabriquer
+    // Les pistes audio (musique, voix) qui peuvent être lues
+    this.pistes = projet.pistes.map((p) => ({ piste: p, media: projet.medias.find((m) => m.id === p.mediaId) }))
+      .filter((x) => x.media && Medias.fichiers.has(x.media.id));
+  }
+
+  /* Le son d'un segment ou d'une piste (ouvert la première fois) */
+  async _sonDe(cle, media) {
+    let s = this.sons.get(cle);
+    if (!s) {
+      s = new SourceSon(media, Medias.fichiers.get(media.id));
+      await s.ouvrir();
+      const avertissement = 'Le son de « ' + media.nom + ' » n\'a pas pu être lu : ce passage sera sans ce son.';
+      if (s.muet && !this.avertissements.includes(avertissement)) this.avertissements.push(avertissement);
+      this.sons.set(cle, s);
+    }
+    return s;
+  }
+
+  /* Le son de la seconde n° « seconde » : { gauche, droite, t, n } */
+  async suivante(seconde) {
+    const { projet, segments, total } = this;
+    const finBloc = Math.min(total, seconde + 1);
+    const e0 = this.echantillon;
+    const e1 = Math.round(finBloc * FREQUENCE_SON);
+    const n = e1 - e0;
+    const gauche = new Float32Array(n);
+    const droite = new Float32Array(n);
+    const tBloc = e0 / FREQUENCE_SON;
+
+    // Le son des clips vidéo
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      if (seg.fin <= tBloc || seg.debut >= finBloc) continue;
+      if (seg.media.type !== 'video' || !seg.media.aSon || seg.clip.volume <= 0) continue;
+      const ia = Math.max(0, Math.round(seg.debut * FREQUENCE_SON) - e0);
+      const ib = Math.min(n, Math.round(seg.fin * FREQUENCE_SON) - e0);
+      if (ib <= ia) continue;
+      const tSortie = (e0 + ia) / FREQUENCE_SON;
+      const s = await this._sonDe('clip' + i, seg.media);
+      await s.ajouter(gauche, droite, ia, ib, tSortie, Montage.tempsFichier(seg, tSortie),
+        (t) => seg.clip.volume * Montage.etat(projet, segments, i, t).son, Montage.vitesse(seg));
+    }
+    // La musique de fond et les voix off
+    for (const { piste, media } of this.pistes) {
+      const duree = PistesAudio.duree(piste, total);
+      const finPiste = piste.debut + duree;
+      if (finPiste <= tBloc || piste.debut >= finBloc) continue;
+      let ia = Math.max(0, Math.round(piste.debut * FREQUENCE_SON) - e0);
+      const ib = Math.min(n, Math.round(finPiste * FREQUENCE_SON) - e0);
+      const s = await this._sonDe('piste' + piste.id, media);
+      const gainA = (t) => PistesAudio.volumeA(piste, t, total, projet);
+      // Une musique qui recommence au début pendant cette seconde : en deux fois
+      while (ia < ib) {
+        const tSortie = (e0 + ia) / FREQUENCE_SON;
+        const position = PistesAudio.positionA(piste, media, tSortie);
+        let jusque = ib;
+        if (piste.type === 'musique' && media.duree > 0) {
+          jusque = Math.min(ib, ia + Math.max(1, Math.round((media.duree - position) * FREQUENCE_SON)));
+        }
+        await s.ajouter(gauche, droite, ia, jusque, tSortie, position, gainA);
+        ia = jusque;
+      }
+    }
+
+    // Les sons terminés sont fermés (ils ne resserviront pas)
+    for (const [cle, s] of this.sons) {
+      const i = cle.startsWith('clip') ? Number(cle.slice(4)) : -1;
+      const piste = cle.startsWith('piste') ? projet.pistes.find((p) => 'piste' + p.id === cle) : null;
+      const fini = i >= 0 ? segments[i].fin <= finBloc : (piste && piste.debut + PistesAudio.duree(piste, total) <= finBloc);
+      if (fini) { await s.fermer(); this.sons.delete(cle); }
+    }
+    this.echantillon = e1;
+    return { gauche, droite, t: tBloc, n };
+  }
+
+  async fermer() {
+    for (const s of this.sons.values()) await s.fermer();
+    this.sons.clear();
+  }
+}
+
+
+/* ---------- Le volume harmonisé ----------
+   YouTube joue toutes les vidéos à peu près au même volume : une vidéo
+   trop forte est baissée, une vidéo trop faible reste… trop faible. On
+   mesure donc le volume « ressenti » de toute la vidéo (la mesure LUFS,
+   celle des télévisions et de YouTube), puis on règle le son pour
+   arriver au niveau conseillé : −14 LUFS. */
+const VOLUME_CIBLE = -14;          // LUFS, le niveau de YouTube
+const GAIN_MAX_DB = 15;            // on ne monte jamais le son de plus de 15 dB (le souffle monterait aussi)…
+const GAIN_MIN_DB = -12;           // … ni ne le baisse de plus de 12 dB
+const PLAFOND_SON = 0.89;          // −1 dB : le son ne touche jamais le maximum
+const PART_MESURE = 0.08;          // part de la barre de progression pour la mesure
+
+class MesureVolume {
+  constructor() {
+    // Le filtre « K » de la mesure LUFS (norme UIT BS.1770, à 48 kHz) :
+    // l'oreille entend moins les graves et un peu plus les aigus
+    this.filtres = [0, 1].map(() => [
+      { b: [1.53512485958697, -2.69169618940638, 1.19839281085285], a: [-1.69065929318241, 0.73248077421585], x1: 0, x2: 0, y1: 0, y2: 0 },
+      { b: [1, -2, 1], a: [-1.99004745483398, 0.99007225036621], x1: 0, x2: 0, y1: 0, y2: 0 }
+    ]);
+    this.taille = FREQUENCE_SON / 10;   // des morceaux de 0,1 seconde
+    this.somme = 0;
+    this.compte = 0;
+    this.morceaux = [];                 // énergie moyenne de chaque morceau de 0,1 s
+  }
+
+  _filtrer(f, x) {
+    const y = f.b[0] * x + f.b[1] * f.x1 + f.b[2] * f.x2 - f.a[0] * f.y1 - f.a[1] * f.y2;
+    f.x2 = f.x1; f.x1 = x;
+    f.y2 = f.y1; f.y1 = y;
+    return y;
+  }
+
+  ajouter(gauche, droite) {
+    const [fg, fd] = this.filtres;
+    for (let k = 0; k < gauche.length; k++) {
+      const g = this._filtrer(fg[1], this._filtrer(fg[0], gauche[k]));
+      const d = this._filtrer(fd[1], this._filtrer(fd[0], droite[k]));
+      this.somme += g * g + d * d;
+      if (++this.compte === this.taille) {
+        this.morceaux.push(this.somme / this.taille);
+        this.somme = 0;
+        this.compte = 0;
+      }
+    }
+  }
+
+  /* Le volume de toute la vidéo, en LUFS (-Infinity si silencieuse) */
+  volume() {
+    // Des fenêtres de 0,4 s qui se chevauchent (4 morceaux de 0,1 s)
+    const blocs = [];
+    for (let i = 0; i + 4 <= this.morceaux.length; i++) {
+      blocs.push((this.morceaux[i] + this.morceaux[i + 1] + this.morceaux[i + 2] + this.morceaux[i + 3]) / 4);
+    }
+    const lufs = (z) => -0.691 + 10 * Math.log10(z);
+    const moyenne = (liste) => liste.reduce((a, b) => a + b, 0) / liste.length;
+    // On ignore les silences (sous −70), puis ce qui est 10 fois plus faible que la moyenne
+    const audibles = blocs.filter((z) => lufs(z) > -70);
+    if (!audibles.length) return -Infinity;
+    const seuil = lufs(moyenne(audibles)) - 10;
+    const retenus = audibles.filter((z) => lufs(z) > seuil);
+    return lufs(moyenne(retenus));
+  }
+}
+
+/* Écoute tout le son de la vidéo et renvoie le réglage de volume
+   (progres(f) : f de 0 à 1) */
+async function mesurerGain(projet, segments, total, avertissements, verifier, progres) {
+  const mesure = new MesureVolume();
+  const ecoute = new Melangeur(projet, segments, total, avertissements);
+  try {
+    for (let seconde = 0; seconde < total; seconde++) {
+      verifier();
+      const { gauche, droite } = await ecoute.suivante(seconde);
+      mesure.ajouter(gauche, droite);
+      progres(Math.min(total, seconde + 1) / total);
+    }
+  } finally {
+    await ecoute.fermer();
+  }
+  return gainPourVolume(mesure.volume());
+}
+
+/* Le réglage de volume (multiplicateur) pour arriver au niveau conseillé */
+function gainPourVolume(lufs) {
+  if (!Number.isFinite(lufs)) return 1;   // vidéo sans son
+  const db = borner(VOLUME_CIBLE - lufs, GAIN_MIN_DB, GAIN_MAX_DB);
+  return Math.pow(10, db / 20);
+}
+
+/* Le limiteur : quand le son (une fois monté) dépasserait le plafond, il
+   est baissé tout de suite, juste ce qu'il faut, puis remonte en douceur
+   (en un dixième de seconde environ). Il garde son état d'une seconde à
+   l'autre. */
+class Limiteur {
+  constructor() {
+    this.reduction = 1;   // 1 = rien n'est baissé
+    this.remontee = 1 - Math.exp(-1 / (0.1 * FREQUENCE_SON));
+  }
+
+  appliquer(gauche, droite, gain) {
+    let r = this.reduction;
+    for (let k = 0; k < gauche.length; k++) {
+      const g = gauche[k] * gain;
+      const d = droite[k] * gain;
+      const crete = Math.max(Math.abs(g), Math.abs(d));
+      const besoin = crete > PLAFOND_SON ? PLAFOND_SON / crete : 1;
+      r = besoin < r ? besoin : r + (1 - r) * this.remontee;
+      if (r > besoin) r = besoin;
+      gauche[k] = g * r;
+      droite[k] = d * r;
+    }
+    this.reduction = r;
   }
 }
 
@@ -425,6 +639,25 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
   }
   verifier();
 
+  // Une longue vidéo se fabrique par morceaux, gardés sur la tablette :
+  // si la fabrication est interrompue, on pourra la reprendre (reprise.js)
+  if (total > SEUIL_PARTIES && lireReglage(CLE_SANS_PARTIES) !== 'oui' && await DisquePrive.peutEcrire()) {
+    return fabriquerParParties(projet, reglages, suivi, arret,
+      { largeur, hauteur, segments, total, nbImages, avertissements, ajustement, verifier });
+  }
+
+  // 1 bis. Volume harmonisé : on écoute d'abord tout le son de la vidéo
+  //    pour mesurer son volume (rapide : aucune image n'est dessinée)
+  const departChrono = performance.now();
+  const partMesure = reglages.harmoniser ? PART_MESURE : 0;
+  const gain = reglages.harmoniser
+    ? await mesurerGain(projet, segments, total, avertissements, verifier, (f) => suivi({
+      fait: partMesure * f, image: 0, images: nbImages, etape: 'mesure',
+      ecoule: (performance.now() - departChrono) / 1000
+    }))
+    : 1;
+  const limiteur = new Limiteur();
+
   // 2. Où écrire : le disque privé (même une vidéo de 30 minutes), ou la
   //    mémoire vive s'il n'existe pas (vidéos courtes seulement)
   let cible;
@@ -462,88 +695,28 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
   sortie.setMetadataTags({ title: projet.nom });
 
   const imagesOuvertes = new Map();   // n° de segment → SourceImages
-  const sonsOuverts = new Map();      // n° de segment ou de piste → SourceSon
+  const sonsOuverts = [];             // le mélangeur du son
   const fermerTout = async () => {
     for (const s of imagesOuvertes.values()) await s.fermer();
-    for (const s of sonsOuverts.values()) await s.fermer();
+    for (const s of sonsOuverts) await s.fermer();
     imagesOuvertes.clear();
-    sonsOuverts.clear();
+    sonsOuverts.length = 0;
   };
 
   try {
     await sortie.start();
 
-    // Le son d'un segment ou d'une piste (ouvert la première fois)
-    const sonDe = async (cle, media) => {
-      let s = sonsOuverts.get(cle);
-      if (!s) {
-        s = new SourceSon(media, Medias.fichiers.get(media.id));
-        await s.ouvrir();
-        if (s.muet) avertissements.push('Le son de « ' + media.nom + ' » n\'a pas pu être lu : ce passage sera sans ce son.');
-        sonsOuverts.set(cle, s);
-      }
-      return s;
-    };
-
-    // Les pistes audio (musique, voix) qui peuvent être lues
-    const pistes = projet.pistes.map((p) => ({ piste: p, media: projet.medias.find((m) => m.id === p.mediaId) }))
-      .filter((x) => x.media && Medias.fichiers.has(x.media.id));
-
     let image = 0;
-    let echantillon = 0;
-    const departChrono = performance.now();
+    const melange = new Melangeur(projet, segments, total, avertissements);
+    sonsOuverts.push(melange);
     for (let seconde = 0; seconde < total; seconde++) {
       verifier();
       const finBloc = Math.min(total, seconde + 1);
 
       // ----- 1. Le son de cette seconde -----
-      const e0 = echantillon;
-      const e1 = Math.round(finBloc * FREQUENCE_SON);
-      const n = e1 - e0;
-      const gauche = new Float32Array(n);
-      const droite = new Float32Array(n);
-      const tBloc = e0 / FREQUENCE_SON;
-
-      // Le son des clips vidéo
-      for (let i = 0; i < segments.length; i++) {
-        const seg = segments[i];
-        if (seg.fin <= tBloc || seg.debut >= finBloc) continue;
-        if (seg.media.type !== 'video' || !seg.media.aSon || seg.clip.volume <= 0) continue;
-        const ia = Math.max(0, Math.round(seg.debut * FREQUENCE_SON) - e0);
-        const ib = Math.min(n, Math.round(seg.fin * FREQUENCE_SON) - e0);
-        if (ib <= ia) continue;
-        const tSortie = (e0 + ia) / FREQUENCE_SON;
-        const s = await sonDe('clip' + i, seg.media);
-        await s.ajouter(gauche, droite, ia, ib, tSortie, seg.clip.debut + (tSortie - seg.debut),
-          (t) => seg.clip.volume * Montage.etat(projet, segments, i, t).son);
-      }
-      // La musique de fond et les voix off
-      for (const { piste, media } of pistes) {
-        const duree = PistesAudio.duree(piste, total);
-        const finPiste = piste.debut + duree;
-        if (finPiste <= tBloc || piste.debut >= finBloc) continue;
-        let ia = Math.max(0, Math.round(piste.debut * FREQUENCE_SON) - e0);
-        const ib = Math.min(n, Math.round(finPiste * FREQUENCE_SON) - e0);
-        const s = await sonDe('piste' + piste.id, media);
-        const gainA = (t) => PistesAudio.volumeA(piste, t, total);
-        // Une musique qui recommence au début pendant cette seconde : en deux fois
-        while (ia < ib) {
-          const tSortie = (e0 + ia) / FREQUENCE_SON;
-          const position = PistesAudio.positionA(piste, media, tSortie);
-          let jusque = ib;
-          if (piste.type === 'musique' && media.duree > 0) {
-            jusque = Math.min(ib, ia + Math.max(1, Math.round((media.duree - position) * FREQUENCE_SON)));
-          }
-          await s.ajouter(gauche, droite, ia, jusque, tSortie, position, gainA);
-          ia = jusque;
-        }
-      }
-      // Plusieurs sons forts additionnés ne doivent pas dépasser le maximum
-      // (sinon le son « grésille » au lieu d'être simplement fort)
-      for (let k = 0; k < n; k++) {
-        if (gauche[k] > 1) gauche[k] = 1; else if (gauche[k] < -1) gauche[k] = -1;
-        if (droite[k] > 1) droite[k] = 1; else if (droite[k] < -1) droite[k] = -1;
-      }
+      const { gauche, droite, t: tBloc, n } = await melange.suivante(seconde);
+      // Le volume harmonisé, puis le limiteur : jamais de grésillement
+      limiteur.appliquer(gauche, droite, gain);
       const donnees = new Float32Array(2 * n);
       donnees.set(gauche, 0);
       donnees.set(droite, n);
@@ -552,7 +725,6 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
       });
       await sourceSon.add(morceauSon);
       morceauSon.close();
-      echantillon = e1;
 
       // ----- 2. Les images de cette seconde -----
       while (image < nbImages && image / IMAGES_PAR_SECONDE < finBloc - 1e-9) {
@@ -563,16 +735,8 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
         image++;
       }
 
-      // Les sons des clips terminés sont fermés (ils ne resserviront pas)
-      for (const [cle, s] of sonsOuverts) {
-        const i = cle.startsWith('clip') ? Number(cle.slice(4)) : -1;
-        const piste = cle.startsWith('piste') ? projet.pistes.find((p) => 'piste' + p.id === cle) : null;
-        const fini = i >= 0 ? segments[i].fin <= finBloc : (piste && piste.debut + PistesAudio.duree(piste, total) <= finBloc);
-        if (fini) { await s.fermer(); sonsOuverts.delete(cle); }
-      }
-
       suivi({
-        fait: finBloc / total, image, images: nbImages, etape: 'images',
+        fait: partMesure + (1 - partMesure) * finBloc / total, image, images: nbImages, etape: 'images',
         ecoule: (performance.now() - departChrono) / 1000
       });
     }
@@ -599,7 +763,9 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
 /* ---------- Dessiner une image de la vidéo finale ----------
    Le fond noir, le ou les clips du moment (avec la transparence et le
    glissement des transitions), puis les textes, images et sous-titres. */
-async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouvertes, ajustement, avertissements) {
+async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouvertes, ajustement, avertissements, options) {
+  const opts = options || {};
+  const Source = opts.source || SourceImages;
   ctx.globalAlpha = 1;
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, largeur, hauteur);
@@ -619,11 +785,14 @@ async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouverte
   }
 
   for (const { i, seg, etat } of actifs) {
-    const tFichier = seg.clip.debut + (t - seg.debut);
+    const tFichier = Montage.tempsFichier(seg, t);
     if (seg.media.type === 'video') {
       let source = ouvertes.get(i);
       if (!source) {
-        source = new SourceImages(Medias.fichiers.get(seg.media.id), seg.clip.debut);
+        if (!Medias.fichiers.has(seg.media.id)) continue;   // vidéo pas encore retrouvée
+        // Lecture à partir d'ici (le début du clip, ou plus loin pour un
+        // morceau de vidéo fabriqué à part : voir reprise.js)
+        source = new Source(Medias.fichiers.get(seg.media.id), Math.max(seg.clip.debut, tFichier));
         await source.ouvrir();
         if (source.fini) avertissements.push('Les images de « ' + seg.media.nom + ' » n\'ont pas pu être lues.');
         ouvertes.set(i, source);
@@ -635,6 +804,8 @@ async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouverte
       ctx.save();
       ctx.globalAlpha = etat.opacite;
       if (etat.decalage) ctx.translate(etat.decalage * largeur, 0);
+      const filtre = Montage.filtre(seg.clip);
+      if (filtre) ctx.filter = filtre;
       echantillon.drawWithFit(ctx, { fit: ajustement });
       ctx.restore();
     } else if (seg.media.type === 'image') {
@@ -642,7 +813,13 @@ async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouverte
       if (!img || etat.opacite <= 0) continue;
       ctx.save();
       ctx.globalAlpha = etat.opacite;
-      if (etat.decalage) ctx.translate(etat.decalage * largeur, 0);
+      // Glissement (transition) et zoom lent, autour du centre de l'image
+      const mvt = Montage.mouvement(seg, t);
+      ctx.translate((etat.decalage + mvt.dx) * largeur + largeur / 2, hauteur / 2);
+      ctx.scale(mvt.echelle, mvt.echelle);
+      ctx.translate(-largeur / 2, -hauteur / 2);
+      const filtre = Montage.filtre(seg.clip);
+      if (filtre) ctx.filter = filtre;
       const echelle = ajustement === 'cover'
         ? Math.max(largeur / img.width, hauteur / img.height)
         : Math.min(largeur / img.width, hauteur / img.height);
@@ -654,5 +831,58 @@ async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouverte
   }
 
   // Les textes, images incrustées et sous-titres : le même dessin que l'aperçu
-  Rendu.dessiner(ctx, largeur, hauteur, projet, t, {});
+  if (opts.calques !== false) Rendu.dessiner(ctx, largeur, hauteur, projet, t, {});
+}
+
+
+/* ---------- Une seule image du montage (pour la miniature) ----------
+   Même interface que SourceImages, mais va chercher directement l'image
+   du moment demandé, sans relire le clip depuis son début. */
+class ImageUnique {
+  constructor(fichier) {
+    this.fichier = fichier;
+    this.echantillon = null;
+    this.fini = false;
+  }
+
+  async ouvrir() {
+    this.entree = new Mediabunny.Input({ source: new Mediabunny.BlobSource(this.fichier), formats: Mediabunny.ALL_FORMATS });
+    this.piste = await this.entree.getPrimaryVideoTrack();
+    if (!this.piste || !(await this.piste.canDecode())) { this.fini = true; return; }
+    this.sink = new Mediabunny.VideoSampleSink(this.piste);
+  }
+
+  async imageA(t) {
+    if (this.fini) return null;
+    if (!this.echantillon) {
+      // Avant la toute première image du fichier : on prend la première
+      const premier = await this.piste.getFirstTimestamp();
+      this.echantillon = await this.sink.getSample(Math.max(t, premier));
+    }
+    return this.echantillon;
+  }
+
+  async fermer() {
+    if (this.echantillon) this.echantillon.close();
+    this.echantillon = null;
+    if (this.entree) this.entree.dispose();
+  }
+}
+
+/* L'image du montage au moment t, SANS les textes ni les sous-titres,
+   dessinée sur une nouvelle toile largeur × hauteur. */
+async function imageDuMontage(projet, t, largeur, hauteur) {
+  const segments = Montage.segments(projet);
+  const total = segments.length ? segments[segments.length - 1].fin : 0;
+  await Rendu.preparerImages(projet);
+  const toile = nouvelleToile(largeur, hauteur);
+  const ctx = toile.getContext('2d', { alpha: false });
+  const ouvertes = new Map();
+  try {
+    await dessinerImage(ctx, largeur, hauteur, projet, segments, borner(t, 0, Math.max(0, total - 0.05)), ouvertes,
+      projet.ajustement === 'remplir' ? 'cover' : 'contain', [], { source: ImageUnique, calques: false });
+  } finally {
+    for (const s of ouvertes.values()) await s.fermer();
+  }
+  return toile;
 }

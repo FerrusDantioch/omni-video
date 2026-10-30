@@ -103,7 +103,25 @@ README), dans le groupe « Création de contenu ».
   tablette n'a que quelques décodeurs vidéo. La future bannière « Mettre à
   jour » (étape h) ne doit jamais s'afficher pendant un export.
 - Vitesse mémorisée par qualité (`omnivideo-vitesse-720p/1080p`, secondes de
-  fabrication par seconde de vidéo) pour annoncer le temps avant de lancer.
+  fabrication par seconde de vidéo) pour annoncer le temps avant de lancer
+  (pas après une reprise).
+- Le son est mélangé par `Melangeur` (une seconde à la fois). Volume
+  harmonisé (case `#export-harmoniser`, `omnivideo-harmoniser`) :
+  `mesurerGain()` écoute tout (`MesureVolume`, BS.1770, vérifié = ffmpeg
+  ebur128) → gain vers −14 LUFS (−12 à +15 dB), puis `Limiteur` (−1 dB,
+  remplace l'ancien écrêtage, toujours actif).
+- **Longues vidéos (> `SEUIL_PARTIES` = 600 s) : `reprise.js`.** Son seul
+  (`omnivideo-son.mp4`), puis images par morceaux de 120 s
+  (`omnivideo-partie-k.mp4`, temps local depuis 0), puis assemblage SANS
+  recompression (`EncodedPacketSink` → `EncodedVideo/AudioPacketSource`,
+  son et images entrelacés, morceau effacé dès qu'il est recopié). État
+  dans `omnivideo-reprise` avec `empreinteExport()` (VERSION, montage,
+  qualité, harmonisation) : montage changé = tout recommence. « Arrêter »
+  garde les morceaux (bouton « Reprendre »). Réglages de décodage H.264
+  différents entre deux morceaux → `MorceauxIncompatibles`,
+  `omnivideo-sans-parties` = 'oui' (la tablette repasse en une seule fois).
+  `dessinerImage()` ouvre un clip à `max(clip.debut, tFichier)` pour qu'un
+  morceau ne relise pas le clip depuis son début.
 
 ## Données
 
@@ -163,6 +181,24 @@ README), dans le groupe « Création de contenu ».
   les balises ; `lireFichierTexte()` essaie UTF-8 puis Windows-1252 (vieux
   .srt français). Pas de filtre `accept` sur le sélecteur : Android ne
   reconnaît pas toujours les .srt. Annuler / Rétablir les garde aussi.
+- Version 1.1 :
+  - `clip.vitesse` (vidéo : 0,5 à 2) ; `Montage.vitesse/tempsFichier/
+    tempsMontage` (transitions.js) font TOUT le lien temps du montage ↔
+    temps du fichier (aperçu `playbackRate` + `preservesPitch = false`
+    pour sonner comme l'export, chronologie, export images et son).
+  - `clip.mouvement` (photo : aucun, zoom-avant, zoom-arriere, balayage) →
+    `Montage.mouvement()` ; `clip.lumiere/contraste/saturation` →
+    `Montage.filtre()` (CSS dans l'aperçu, `ctx.filter` à l'export).
+  - `projet.baisserMusique` : `PistesAudio.baisseSousVoix()` dans
+    `volumeA()` (aperçu et export).
+  - `projet.miniature` et `projet.chapitres` (youtube.js) ;
+    `imageDuMontage()` + `ImageUnique` (fabrication.js) pour une seule
+    image sans les textes. Chapitres dans Annuler et dans la règle.
+  - Dupliquer : `Chronologie.dupliquerClip()`, `Incrustations.dupliquer()`.
+  - `intro.js` : insère un autre projet (copie images/sons, jamais les
+    vidéos), repousse le reste au début, sans transition à la jointure.
+  - `guide.js` : `omnivideo-guide-vu`, bulles sans voile.
+  - Six onglets : grille de 3 colonnes.
 - ⚠️ `rendu.js` dessine les calques pour l'aperçu ET pour l'export : ne jamais
   dessiner un calque autrement à l'export, sinon l'aperçu mentirait.
 - ⚠️ `nettoyerProjet()` et `nettoyerMedia()` ne gardent **que** les champs

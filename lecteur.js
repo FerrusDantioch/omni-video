@@ -193,7 +193,8 @@ const Lecteur = {
       if (!el) continue;
       if (el.tagName === 'VIDEO') {
         const commence = s === seg || this.t >= s.debut;
-        const local = commence ? s.clip.debut + (this.t - s.debut) : s.clip.debut;
+        const local = commence ? Montage.tempsFichier(s, this.t) : s.clip.debut;
+        this._vitesse(el, s);
         // Pendant la lecture, on tolère un petit écart (un recalage ferait un à-coup)
         const tolerance = this.enLecture ? 0.3 : 0.04;
         if (el._neuf || Math.abs(el.currentTime - local) > tolerance) el.currentTime = local;
@@ -258,7 +259,17 @@ const Lecteur = {
      transition (une vidéo coupée en deux) : le même lecteur continue. */
   _continuite(seg, suivant) {
     return !!suivant && !suivant.transition && this._estVideo(seg) && this._estVideo(suivant) &&
-           seg.media.id === suivant.media.id && Math.abs(suivant.clip.debut - seg.clip.fin) < 0.02;
+           seg.media.id === suivant.media.id && Math.abs(suivant.clip.debut - seg.clip.fin) < 0.02 &&
+           Montage.vitesse(seg) === Montage.vitesse(suivant);
+  },
+
+  /* Ralenti / accéléré : le lecteur joue à la vitesse du clip. Le son
+     suit la vitesse (plus grave au ralenti, plus aigu en accéléré),
+     exactement comme dans la vidéo finale. */
+  _vitesse(el, seg) {
+    const v = Montage.vitesse(seg);
+    if (el.playbackRate !== v) el.playbackRate = v;
+    if ('preservesPitch' in el && el.preservesPitch) el.preservesPitch = false;
   },
 
   /* ---------- L'apparence de chaque élément à l'instant t ----------
@@ -285,7 +296,13 @@ const Lecteur = {
         continue;
       }
       el.style.opacity = String(v.etat.opacite);
-      el.style.transform = v.etat.decalage ? 'translateX(' + (v.etat.decalage * 100).toFixed(2) + '%)' : '';
+      // Glissement (transition), zoom lent d'une photo, lumière et couleurs
+      const mvt = Montage.mouvement(v.seg, this.t);
+      const dx = v.etat.decalage + mvt.dx;
+      el.style.transform = (dx ? 'translateX(' + (dx * 100).toFixed(2) + '%) ' : '') +
+        (mvt.echelle !== 1 ? 'scale(' + mvt.echelle.toFixed(4) + ')' : '');
+      const filtre = Montage.filtre(v.seg.clip);
+      if (el.style.filter !== filtre) el.style.filter = filtre;
       el.style.zIndex = v.etat.dessus ? '2' : '1';
       if (el.tagName === 'VIDEO') {
         el.volume = borner(v.seg.clip.volume * v.etat.son, 0, 1);
@@ -308,7 +325,7 @@ const Lecteur = {
       let fini = false;
       if (el) {
         const local = el.currentTime;
-        this.t = borner(seg.debut + (local - seg.clip.debut), seg.debut, seg.fin);
+        this.t = borner(Montage.tempsMontage(seg, local), seg.debut, seg.fin);
         fini = local >= seg.clip.fin - MARGE_FIN_CLIP;
       } else {
         this.t = this._horloge.t0 + (performance.now() - this._horloge.depart) / 1000;
@@ -319,7 +336,8 @@ const Lecteur = {
       if (suivant && this.t >= suivant.debut) {
         const el2 = this._attribution.get(suivant);
         if (el2 && el2.tagName === 'VIDEO' && el2.paused) {
-          el2.currentTime = suivant.clip.debut + (this.t - suivant.debut);
+          el2.currentTime = Montage.tempsFichier(suivant, this.t);
+          this._vitesse(el2, suivant);
           el2.play().catch(() => {});
         }
       }

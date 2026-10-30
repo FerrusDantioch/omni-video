@@ -133,6 +133,8 @@ const Chronologie = {
     for (let s = 0; s <= duree + 0.001; s += pas) {
       regle += '<span class="chrono-repere" style="left:' + Math.round(this._marge + s * this.pps) + 'px">' + formaterDuree(s) + '</span>';
     }
+    // Les chapitres YouTube : un petit drapeau dans la règle
+    regle += Chapitres.reperes(projet, this._marge, this.pps);
     $('#chrono-regle').innerHTML = regle;
 
     // Les clips
@@ -432,7 +434,7 @@ const Chronologie = {
     return JSON.stringify({
       clips: p.clips, calques: p.calques, pistes: p.pistes,
       transitionDebut: p.transitionDebut, transitionFin: p.transitionFin,
-      sousTitres: p.sousTitres, styleSousTitres: p.styleSousTitres, t: Lecteur.t
+      sousTitres: p.sousTitres, styleSousTitres: p.styleSousTitres, chapitres: p.chapitres, t: Lecteur.t
     });
   },
 
@@ -447,7 +449,9 @@ const Chronologie = {
     projet.transitionFin = nettoyerTransition(donnees.transitionFin, TYPES_TRANSITION_BORD);
     projet.sousTitres = nettoyerSousTitres(donnees.sousTitres);
     projet.styleSousTitres = nettoyerStyleSousTitres(donnees.styleSousTitres);
+    projet.chapitres = nettoyerChapitres(donnees.chapitres);
     this._apresModification(donnees.t);
+    Chapitres.afficherListe();
     PistesAudio.afficherListes();
     PistesAudio.synchroniser();
     // L'éditeur ouvert suit (ou se ferme si son calque n'existe plus)

@@ -806,20 +806,20 @@ input[type="range"] { -webkit-appearance: none; appearance: none; }
 /* ---------- 9 ter. Onglets du panneau de droite ---------- */
 
 /* Cinq onglets, toujours sur une seule rangée (le texte va à la ligne s'il le faut) */
-.onglets { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+/* Six onglets : deux rangées de trois (de la place pour les mots) */
+.onglets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .onglet {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  min-height: 64px;
-  padding: 6px 2px;
+  gap: 6px;
+  min-height: 56px;
+  padding: 6px 4px;
   border: 2px solid var(--bord-bouton);
   border-radius: var(--rayon-bouton);
   background: var(--surface);
   color: var(--discret);
-  font: 700 0.86rem/1.15 var(--f-titre);
+  font: 700 0.95rem/1.15 var(--f-titre);
   text-align: center;
   overflow-wrap: anywhere;
   cursor: pointer;
@@ -1123,4 +1123,60 @@ dialog.fenetre-large { width: min(900px, calc(100vw - 24px)); padding: 18px; }
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
   }
+}
+
+
+/* ---------- Onglet « YouTube » (youtube.js) ---------- */
+.cadre-miniature { position: relative; justify-self: center; width: 100%; max-width: 480px; }
+.miniature-apercu {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  background: #000;          /* le fond de l'IMAGE, pas de l'interface */
+  border: 1px solid var(--trait);
+  border-radius: 8px;
+}
+.miniature-apercu[data-format="9:16"] { aspect-ratio: 9 / 16; max-width: 240px; margin: 0 auto; }
+.miniature-attente {
+  position: absolute;
+  inset: auto 8px 8px 8px;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--fond) 85%, transparent);
+  font-size: 0.95rem;
+  text-align: center;
+}
+.liste-chapitres { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.carte-chapitre { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.carte-chapitre .bouton { min-height: 56px; padding: 6px 12px; }
+.carte-chapitre .mono { font-family: var(--f-chiffres); min-width: 5.5em; }
+.carte-chapitre input {
+  min-height: 56px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 2px solid var(--bord-bouton);
+  border-radius: var(--rayon-bouton);
+  background: var(--fond);
+  color: var(--texte);
+  font: 1.05rem var(--f-texte);
+}
+.carte-chapitre input:focus { border-color: var(--accent); outline: none; }
+.liste-soucis { margin: 0; padding: 10px 14px 10px 32px; display: grid; gap: 4px; }
+#chapitres-texte { font-family: var(--f-chiffres); }
+/* Les chapitres dans la règle de la chronologie : un petit drapeau */
+.chrono-chapitre {
+  position: absolute;
+  top: 0;
+  max-width: 140px;
+  padding: 0 6px 0 5px;
+  border-left: 3px solid var(--or);
+  color: var(--or);
+  font: 700 0.72rem/1.4 var(--f-titre);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  pointer-events: none;
 }

@@ -189,6 +189,15 @@ const ACTIONS = {
   'decaler-sous-titres':       (b) => SousTitres.decaler(Number(b.dataset.secondes)),
   'enregistrer-srt':           () => SousTitres.enregistrerSrt(),
 
+  // Onglet « YouTube » : miniature et chapitres
+  'miniature-image':       () => Miniature.prendreImage(),
+  'miniature-reglage':     (b) => Miniature.changer(b.dataset.reglage, b.dataset.valeur),
+  'miniature-enregistrer': () => Miniature.enregistrer(),
+  'ajouter-chapitre':      () => Chapitres.ajouter(),
+  'aller-chapitre':        (b) => Chapitres.aller(b.dataset.id),
+  'supprimer-chapitre':    (b) => Chapitres.supprimer(b.dataset.id, b),
+  'copier-chapitres':      () => Chapitres.copier(),
+
   // Fabriquer la vidéo finale
   'ouvrir-export':     () => Export.ouvrir(),
   'export-lancer':     () => Export.lancer(),
@@ -351,6 +360,8 @@ async function demarrer() {
   Incrustations.initialiser();
   PistesAudio.initialiser();
   SousTitres.initialiser();
+  Miniature.initialiser();
+  Chapitres.initialiser();
   Export.initialiser();
   Installation.initialiser();
 

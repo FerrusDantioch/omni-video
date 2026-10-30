@@ -599,7 +599,9 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
 /* ---------- Dessiner une image de la vidéo finale ----------
    Le fond noir, le ou les clips du moment (avec la transparence et le
    glissement des transitions), puis les textes, images et sous-titres. */
-async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouvertes, ajustement, avertissements) {
+async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouvertes, ajustement, avertissements, options) {
+  const opts = options || {};
+  const Source = opts.source || SourceImages;
   ctx.globalAlpha = 1;
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, largeur, hauteur);
@@ -623,7 +625,8 @@ async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouverte
     if (seg.media.type === 'video') {
       let source = ouvertes.get(i);
       if (!source) {
-        source = new SourceImages(Medias.fichiers.get(seg.media.id), seg.clip.debut);
+        if (!Medias.fichiers.has(seg.media.id)) continue;   // vidéo pas encore retrouvée
+        source = new Source(Medias.fichiers.get(seg.media.id), seg.clip.debut);
         await source.ouvrir();
         if (source.fini) avertissements.push('Les images de « ' + seg.media.nom + ' » n\'ont pas pu être lues.');
         ouvertes.set(i, source);
@@ -654,5 +657,58 @@ async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouverte
   }
 
   // Les textes, images incrustées et sous-titres : le même dessin que l'aperçu
-  Rendu.dessiner(ctx, largeur, hauteur, projet, t, {});
+  if (opts.calques !== false) Rendu.dessiner(ctx, largeur, hauteur, projet, t, {});
+}
+
+
+/* ---------- Une seule image du montage (pour la miniature) ----------
+   Même interface que SourceImages, mais va chercher directement l'image
+   du moment demandé, sans relire le clip depuis son début. */
+class ImageUnique {
+  constructor(fichier) {
+    this.fichier = fichier;
+    this.echantillon = null;
+    this.fini = false;
+  }
+
+  async ouvrir() {
+    this.entree = new Mediabunny.Input({ source: new Mediabunny.BlobSource(this.fichier), formats: Mediabunny.ALL_FORMATS });
+    this.piste = await this.entree.getPrimaryVideoTrack();
+    if (!this.piste || !(await this.piste.canDecode())) { this.fini = true; return; }
+    this.sink = new Mediabunny.VideoSampleSink(this.piste);
+  }
+
+  async imageA(t) {
+    if (this.fini) return null;
+    if (!this.echantillon) {
+      // Avant la toute première image du fichier : on prend la première
+      const premier = await this.piste.getFirstTimestamp();
+      this.echantillon = await this.sink.getSample(Math.max(t, premier));
+    }
+    return this.echantillon;
+  }
+
+  async fermer() {
+    if (this.echantillon) this.echantillon.close();
+    this.echantillon = null;
+    if (this.entree) this.entree.dispose();
+  }
+}
+
+/* L'image du montage au moment t, SANS les textes ni les sous-titres,
+   dessinée sur une nouvelle toile largeur × hauteur. */
+async function imageDuMontage(projet, t, largeur, hauteur) {
+  const segments = Montage.segments(projet);
+  const total = segments.length ? segments[segments.length - 1].fin : 0;
+  await Rendu.preparerImages(projet);
+  const toile = nouvelleToile(largeur, hauteur);
+  const ctx = toile.getContext('2d', { alpha: false });
+  const ouvertes = new Map();
+  try {
+    await dessinerImage(ctx, largeur, hauteur, projet, segments, borner(t, 0, Math.max(0, total - 0.05)), ouvertes,
+      projet.ajustement === 'remplir' ? 'cover' : 'contain', [], { source: ImageUnique, calques: false });
+  } finally {
+    for (const s of ouvertes.values()) await s.fermer();
+  }
+  return toile;
 }

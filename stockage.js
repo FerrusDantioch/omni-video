@@ -163,8 +163,48 @@ function nettoyerProjet(brut) {
     transitionDebut: nettoyerTransition(brut.transitionDebut, TYPES_TRANSITION_BORD),
     transitionFin: nettoyerTransition(brut.transitionFin, TYPES_TRANSITION_BORD),
     sousTitres: nettoyerSousTitres(brut.sousTitres),
-    styleSousTitres: nettoyerStyleSousTitres(brut.styleSousTitres)
+    styleSousTitres: nettoyerStyleSousTitres(brut.styleSousTitres),
+    miniature: nettoyerMiniature(brut.miniature),
+    chapitres: nettoyerChapitres(brut.chapitres)
   };
+}
+
+/* La miniature YouTube (onglet « YouTube », voir youtube.js) :
+   - t : le moment de la vidéo dont on prend l'image (null = pas encore choisi)
+   - texte : le titre écrit en gros par-dessus
+   - couleur, place (haut, centre, bas), taille (normale, grande, enorme) */
+const PLACES_MINIATURE = ['haut', 'centre', 'bas'];
+const TAILLES_MINIATURE = ['normale', 'grande', 'enorme'];
+
+function nettoyerMiniature(brut) {
+  const m = brut && typeof brut === 'object' ? brut : {};
+  return {
+    t: Number.isFinite(m.t) && m.t >= 0 ? m.t : null,
+    texte: typeof m.texte === 'string' ? m.texte.slice(0, 80) : '',
+    couleur: typeof m.couleur === 'string' && /^#[0-9a-f]{6}$/i.test(m.couleur) ? m.couleur : '#ffd84d',
+    place: PLACES_MINIATURE.includes(m.place) ? m.place : 'bas',
+    taille: TAILLES_MINIATURE.includes(m.taille) ? m.taille : 'grande'
+  };
+}
+
+/* Les chapitres YouTube : [{ id, t, titre }], t en secondes ENTIÈRES de
+   la vidéo finale (YouTube ne compte pas les dixièmes), toujours rangés
+   dans l'ordre du temps, jamais deux au même moment. */
+const CHAPITRES_MAX = 100;
+
+function nettoyerChapitres(liste) {
+  if (!Array.isArray(liste)) return [];
+  const vus = new Set();
+  return liste
+    .filter((c) => c && typeof c.id === 'string' && Number.isFinite(c.t))
+    .map((c) => ({
+      id: c.id,
+      t: Math.max(0, Math.min(DUREE_CALQUE_MAX, Math.round(c.t))),
+      titre: typeof c.titre === 'string' ? c.titre.slice(0, 100) : ''
+    }))
+    .sort((a, b) => a.t - b.t)
+    .filter((c) => { if (vus.has(c.t)) return false; vus.add(c.t); return true; })
+    .slice(0, CHAPITRES_MAX);
 }
 
 /* Les sous-titres : ce qui est dit, écrit en bas de l'image.

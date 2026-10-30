@@ -6,7 +6,7 @@
    OMNI-VIDÉO — incrustations.js
    Les textes et les images posés par-dessus la vidéo (les « calques »).
    - Les onglets du panneau de droite : Mes fichiers, Textes, Images,
-     Son, Sous-titres.
+     Son, Sous-titres, YouTube.
    - La liste des textes et des images incrustées.
    - L'éditeur : le texte, la police, la taille, la couleur, le style,
      la place dans l'image et le moment où il apparaît.
@@ -48,6 +48,7 @@ const Onglets = {
     if (nom === 'textes' || nom === 'images') Incrustations.afficherListes();
     if (nom === 'son') PistesAudio.afficherListes();
     if (nom === 'sous-titres') SousTitres.afficherListe();
+    if (nom === 'youtube') { Miniature.afficher(); Chapitres.afficherListe(); }
   }
 };
 

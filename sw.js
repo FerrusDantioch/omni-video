@@ -46,6 +46,7 @@ const FICHIERS = [
   './disque-prive.js',
   './export.js',
   './sauvegarde.js',
+  './youtube.js',
   './projets.js',
   './app.js',
   './manifest.json',

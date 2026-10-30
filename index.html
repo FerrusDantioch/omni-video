@@ -38,6 +38,7 @@
 <script defer src="./fabrication.js"></script>
 <script defer src="./export.js"></script>
 <script defer src="./sauvegarde.js"></script>
+<script defer src="./youtube.js"></script>
 <script defer src="./projets.js"></script>
 <script defer src="./app.js"></script>
 </head>
@@ -70,6 +71,8 @@
     <symbol id="i-telecharger" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></g></symbol>
     <symbol id="i-film" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 8h4M3 16h4M17 8h4M17 16h4"/></g></symbol>
     <symbol id="i-partager" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></g></symbol>
+    <symbol id="i-youtube" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="4"/><path d="M10 9v6l5-3z" fill="currentColor"/></g></symbol>
+    <symbol id="i-copier" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></g></symbol>
     <symbol id="i-texte" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6V4h16v2M12 4v16M9 20h6"/></g></symbol>
     <symbol id="i-ciseaux" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/></g></symbol>
     <symbol id="i-enlever-avant" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v18"/><rect x="16" y="7" width="6" height="10" rx="1"/><path d="M3 8l7 8M10 8l-7 8"/></g></symbol>
@@ -220,7 +223,7 @@
       <p class="temps-montage"><span class="mono" id="montage-temps">0:00,0</span> <span class="discret">sur</span> <span class="mono" id="montage-duree">0:00</span></p>
     </div>
 
-    <!-- Le panneau de droite : cinq onglets -->
+    <!-- Le panneau de droite : six onglets -->
     <div class="panneau">
       <div class="onglets" role="tablist" aria-label="Que veux-tu faire ?">
         <button type="button" class="onglet" role="tab" data-action="onglet" data-onglet="fichiers" aria-selected="true">
@@ -237,6 +240,9 @@
         </button>
         <button type="button" class="onglet" role="tab" data-action="onglet" data-onglet="sous-titres" aria-selected="false">
           <svg class="icone" aria-hidden="true"><use href="#i-sous-titres"/></svg>Sous-titres
+        </button>
+        <button type="button" class="onglet" role="tab" data-action="onglet" data-onglet="youtube" aria-selected="false">
+          <svg class="icone" aria-hidden="true"><use href="#i-youtube"/></svg>YouTube
         </button>
       </div>
 
@@ -398,6 +404,71 @@
         </div>
         <p class="aide" id="st-aide-srt" hidden>Le fichier .srt peut aussi être envoyé sur YouTube (« Sous-titres »),
            en plus des sous-titres incrustés dans l'image.</p>
+      </div>
+
+      <!-- Onglet « YouTube » : la miniature et les chapitres (voir youtube.js) -->
+      <div class="onglet-contenu" data-onglet="youtube" role="tabpanel" hidden>
+        <details class="ed-section" id="yt-miniature" open>
+          <summary>Miniature : l'image qui donne envie de cliquer</summary>
+          <div class="ed-contenu">
+            <div class="cadre-miniature">
+              <canvas class="miniature-apercu" id="miniature-apercu" width="640" height="360" role="img" aria-label="Aperçu de la miniature"></canvas>
+              <p class="miniature-attente" id="miniature-attente" hidden></p>
+            </div>
+            <p class="aide" id="miniature-moment"></p>
+            <button type="button" class="bouton grand" data-action="miniature-image">
+              <svg class="icone" aria-hidden="true"><use href="#i-image"/></svg>Prendre l'image de la ligne violette
+            </button>
+            <label class="champ">Titre écrit sur la miniature
+              <textarea id="miniature-texte" rows="2" maxlength="80" placeholder="Par exemple : MA RECETTE EN 5 MINUTES"></textarea>
+            </label>
+            <p class="aide">Peu de mots, en gros : c'est ce qui se lit le mieux sur un petit écran.</p>
+            <p class="etiquette">Couleur du titre</p>
+            <div class="ed-couleurs" id="miniature-couleurs" role="group" aria-label="Couleur du titre"></div>
+            <p class="etiquette">Place du titre</p>
+            <div class="ed-choix" role="group" aria-label="Place du titre">
+              <button type="button" class="bouton" data-action="miniature-reglage" data-reglage="place" data-valeur="haut">En haut</button>
+              <button type="button" class="bouton" data-action="miniature-reglage" data-reglage="place" data-valeur="centre">Au centre</button>
+              <button type="button" class="bouton" data-action="miniature-reglage" data-reglage="place" data-valeur="bas">En bas</button>
+            </div>
+            <p class="etiquette">Taille du titre</p>
+            <div class="ed-choix" role="group" aria-label="Taille du titre">
+              <button type="button" class="bouton" data-action="miniature-reglage" data-reglage="taille" data-valeur="normale">Grande</button>
+              <button type="button" class="bouton" data-action="miniature-reglage" data-reglage="taille" data-valeur="grande">Très grande</button>
+              <button type="button" class="bouton" data-action="miniature-reglage" data-reglage="taille" data-valeur="enorme">Énorme</button>
+            </div>
+            <button type="button" class="bouton bouton-principal grand" data-action="miniature-enregistrer" id="miniature-enregistrer">
+              <svg class="icone" aria-hidden="true"><use href="#i-telecharger"/></svg>Enregistrer la miniature
+            </button>
+            <p class="aide">Elle arrive dans « Téléchargements », en image JPEG à la taille demandée par YouTube.
+               Au moment de publier ta vidéo sur YouTube, choisis de modifier la miniature et importe cette image.
+               YouTube peut demander de valider ton compte par téléphone (une seule fois) avant d'accepter une miniature.</p>
+          </div>
+        </details>
+
+        <details class="ed-section" id="yt-chapitres" open>
+          <summary>Chapitres : les étapes de ta vidéo</summary>
+          <div class="ed-contenu">
+            <p class="aide">Les chapitres découpent ta vidéo en parties (« Intro », « La recette »…). Sur YouTube, on peut
+               sauter directement à l'une d'elles.</p>
+            <button type="button" class="bouton bouton-principal grand" data-action="ajouter-chapitre">
+              <svg class="icone" aria-hidden="true"><use href="#i-plus"/></svg>Ajouter un chapitre à la ligne violette
+            </button>
+            <ul class="liste-chapitres" id="liste-chapitres"></ul>
+            <p class="vide" id="chapitres-vide">Pas encore de chapitres. Le premier commence toujours au début de la vidéo.
+               Ensuite, place la ligne violette là où une nouvelle partie commence, et touche « Ajouter un chapitre ».</p>
+            <div class="ed-contenu" id="chapitres-texte-bloc" hidden>
+              <ul class="avis attention-douce liste-soucis" id="chapitres-soucis" hidden></ul>
+              <label class="champ">Texte pour la description YouTube
+                <textarea id="chapitres-texte" rows="4" readonly></textarea>
+              </label>
+              <button type="button" class="bouton grand" data-action="copier-chapitres">
+                <svg class="icone" aria-hidden="true"><use href="#i-copier"/></svg>Copier pour YouTube
+              </button>
+              <p class="aide">Puis, sur YouTube, colle ce texte dans la description de ta vidéo.</p>
+            </div>
+          </div>
+        </details>
       </div>
 
       <!-- L'éditeur d'un texte ou d'une image incrustée (voir incrustations.js) -->

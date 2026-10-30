@@ -116,6 +116,7 @@ const Projets = {
     PistesAudio.vider();
     this.courant = null;
     Rendu.oublierImages();
+    Miniature.oublier();
     Incrustations.redessiner(true);
   },
 
@@ -213,6 +214,8 @@ const Projets = {
     if (!$('#etat-sauvegarde').textContent) ecrireTexte($('#etat-sauvegarde'), 'Enregistré ✓');
     this.afficherManquantes();
     this.afficherMedias();
+    // L'onglet YouTube suit (forme changée, vidéos retrouvées…)
+    if (Onglets.actif === 'youtube') Miniature.afficher();
   },
 
   afficherManquantes() {

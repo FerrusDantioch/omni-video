@@ -207,6 +207,7 @@ const ACTIONS = {
   'guide-suivant':         () => Guide.suivant(),
   'guide-passer':          () => Guide.terminer(),
   'revoir-guide':          () => Guide.revoir(),
+  'inserer-projet':        (b) => IntroFin.inserer(b.dataset.id, b.dataset.place),
 
   // Fabriquer la vidéo finale
   'ouvrir-export':     () => Export.ouvrir(),
@@ -373,6 +374,7 @@ async function demarrer() {
   Miniature.initialiser();
   Chapitres.initialiser();
   Guide.initialiser();
+  IntroFin.initialiser();
   Export.initialiser();
   Installation.initialiser();
 

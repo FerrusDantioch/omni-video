@@ -48,6 +48,7 @@ const FICHIERS = [
   './sauvegarde.js',
   './youtube.js',
   './guide.js',
+  './intro.js',
   './projets.js',
   './app.js',
   './manifest.json',

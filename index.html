@@ -40,6 +40,7 @@
 <script defer src="./sauvegarde.js"></script>
 <script defer src="./youtube.js"></script>
 <script defer src="./guide.js"></script>
+<script defer src="./intro.js"></script>
 <script defer src="./projets.js"></script>
 <script defer src="./app.js"></script>
 </head>
@@ -261,6 +262,17 @@
         </button>
       </div>
       <p class="avis" id="import-etat" aria-live="polite" hidden></p>
+      <!-- Intro et fin réutilisables (voir intro.js) -->
+      <details class="ed-section" id="bloc-intro">
+        <summary>Ajouter mon intro ou ma fin</summary>
+        <div class="ed-contenu">
+          <p class="aide">Fabrique ton intro (logo, titre, petite musique) ou ta fin (« Abonne-toi ! ») comme un petit
+             projet à part. Ensuite, ajoute-la ici, au début ou à la fin de cette vidéo.</p>
+          <ul class="liste-intro" id="liste-intro"></ul>
+          <p class="vide" id="intro-vide" hidden>Pas encore d'autre projet. Retourne à « Mes projets » et crée par exemple
+             un projet « Mon intro ».</p>
+        </div>
+      </details>
       <ul class="liste-medias" id="liste-medias"></ul>
       <p class="vide" id="medias-vide">Aucun fichier pour l'instant. Commence par ajouter tes vidéos :
          elles restent sur la tablette, rien n'est envoyé sur Internet.</p>

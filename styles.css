@@ -1113,6 +1113,11 @@ dialog.fenetre-large { width: min(900px, calc(100vw - 24px)); padding: 18px; }
 .message-flottant.probleme { border-color: var(--danger); }
 .message-flottant.cache { opacity: 0; pointer-events: none; }
 
+/* ---------- Intro et fin réutilisables (intro.js) ---------- */
+.liste-intro { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.carte-intro { display: grid; gap: 8px; padding: 10px 12px; background: var(--surface-2); border-radius: 10px; }
+.carte-intro .media-nom { margin: 0; }
+
 /* ---------- Le guide de la première fois (guide.js) ---------- */
 /* Pas de voile : la page reste utilisable, seule la bulle se pose dessus */
 .guide { position: fixed; inset: 0; z-index: 40; pointer-events: none; }

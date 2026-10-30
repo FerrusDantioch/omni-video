@@ -86,6 +86,23 @@ const Rendu = {
     return null;
   },
 
+  /* Prépare TOUTES les images du projet (incrustées et clips) avant
+     l'export : chaque image de la vidéo finale doit être complète dès la
+     première fois, sans attendre. */
+  async preparerImages(projet) {
+    const ids = new Set();
+    projet.calques.forEach((c) => { if (c.type === 'image') ids.add(c.mediaId); });
+    projet.clips.forEach((c) => {
+      const media = projet.medias.find((m) => m.id === c.mediaId);
+      if (media && media.type === 'image') ids.add(media.id);
+    });
+    await Promise.all(Array.from(ids).map(async (id) => {
+      const fichier = Medias.fichiers.get(id);
+      if (this._images.has(id) || !fichier) return;
+      try { this._images.set(id, await createImageBitmap(fichier)); } catch (e) { /* image illisible : ignorée */ }
+    }));
+  },
+
   /* Libère la mémoire des images (projet fermé) */
   oublierImages() {
     this._images.forEach((img) => { if (img.close) img.close(); });

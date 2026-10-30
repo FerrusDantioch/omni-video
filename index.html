@@ -33,6 +33,8 @@
 <script defer src="./incrustations.js"></script>
 <script defer src="./audio.js"></script>
 <script defer src="./sous-titres.js"></script>
+<script defer src="./fabrication.js"></script>
+<script defer src="./export.js"></script>
 <script defer src="./projets.js"></script>
 <script defer src="./app.js"></script>
 </head>
@@ -63,6 +65,8 @@
     <symbol id="i-son" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 8a5 5 0 0 1 0 8M19.5 5.5a9 9 0 0 1 0 13"/></g></symbol>
     <symbol id="i-sous-titres" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 13h5M14 13h4M6 16.5h9M17 16.5h1"/></g></symbol>
     <symbol id="i-telecharger" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></g></symbol>
+    <symbol id="i-film" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 8h4M3 16h4M17 8h4M17 16h4"/></g></symbol>
+    <symbol id="i-partager" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></g></symbol>
     <symbol id="i-texte" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6V4h16v2M12 4v16M9 20h6"/></g></symbol>
     <symbol id="i-ciseaux" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/></g></symbol>
     <symbol id="i-enlever-avant" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v18"/><rect x="16" y="7" width="6" height="10" rx="1"/><path d="M3 8l7 8M10 8l-7 8"/></g></symbol>
@@ -138,6 +142,9 @@
     </button>
     <button type="button" class="bouton" data-action="changer-format">
       <svg class="icone" aria-hidden="true"><use href="#i-format"/></svg><span id="bouton-format-texte">Format</span>
+    </button>
+    <button type="button" class="bouton bouton-principal" data-action="ouvrir-export" id="bouton-export">
+      <svg class="icone" aria-hidden="true"><use href="#i-film"/></svg>Fabriquer la vidéo
     </button>
   </header>
 
@@ -658,6 +665,12 @@
          et ses contributeurs, version 1.63.0, sous sa propre licence, la Mozilla Public License 2.0
          (fichier LICENCE-MEDIABUNNY.txt). Le fichier est inclus sans modification ; son code source
          est disponible sur <a href="https://github.com/Vanilagy/mediabunny" target="_blank" rel="noopener noreferrer">github.com/Vanilagy/mediabunny ↗</a>.</p>
+      <p><strong>Encodeur AAC de secours</strong> (le son de la vidéo finale, si la tablette ne sait pas
+         le fabriquer elle-même) : l'extension @mediabunny/aac-encoder 1.63.0 de Vanilagy, sous licence
+         Mozilla Public License 2.0, qui contient l'encodeur AAC de <strong>FFmpeg</strong>, sous licence
+         GNU LGPL 2.1 ou ultérieure (fichier LICENCE-LGPL-FFMPEG.txt). Inclus sans modification ; codes
+         sources sur <a href="https://github.com/Vanilagy/mediabunny/tree/main/packages/aac-encoder" target="_blank" rel="noopener noreferrer">github.com/Vanilagy/mediabunny ↗</a>
+         et <a href="https://github.com/FFmpeg/FFmpeg" target="_blank" rel="noopener noreferrer">github.com/FFmpeg/FFmpeg ↗</a>.</p>
       <p><strong>Polices de caractères</strong> : Oxanium, Literata et JetBrains Mono, sous leur
          propre licence, la SIL Open Font License 1.1 (fichier POLICES-OFL.txt).</p>
     </div>
@@ -814,6 +827,117 @@
       <button type="submit" class="bouton bouton-principal" value="remplacer">Remplacer mes sous-titres actuels</button>
       <button type="submit" class="bouton" value="ajouter">Les ajouter à mes sous-titres actuels</button>
       <button type="submit" class="bouton" value="annuler">Annuler</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Fabriquer la vidéo finale (voir export.js et fabrication.js).
+     Une seule partie est visible à la fois : réglages, fabrication en
+     cours, vidéo prête, ou souci. -->
+<dialog id="fenetre-export" class="fenetre-export" aria-labelledby="titre-export">
+  <form method="dialog">
+    <!-- 1. Les réglages -->
+    <div class="export-etape" data-etape="reglages">
+      <h2 id="titre-export">Fabriquer la vidéo</h2>
+      <p class="mono" id="export-resume"></p>
+      <fieldset class="choix">
+        <legend>Forme</legend>
+        <label>
+          <input type="radio" name="format" value="16:9">
+          <span class="forme forme-169" aria-hidden="true"></span>
+          <strong>Horizontale</strong>
+          <small>16:9 — YouTube classique</small>
+        </label>
+        <label>
+          <input type="radio" name="format" value="9:16">
+          <span class="forme forme-916" aria-hidden="true"></span>
+          <strong>Verticale</strong>
+          <small>9:16 — YouTube Shorts</small>
+        </label>
+      </fieldset>
+      <fieldset class="choix">
+        <legend>Qualité</legend>
+        <label>
+          <input type="radio" name="qualite" value="1080p">
+          <strong>1080p</strong>
+          <small>Très nette. Conseillée pour YouTube.</small>
+        </label>
+        <label>
+          <input type="radio" name="qualite" value="720p">
+          <strong>720p</strong>
+          <small>Plus rapide, fichier plus léger.</small>
+        </label>
+      </fieldset>
+      <p class="aide" id="export-sans-1080" hidden>Ta tablette ne sait pas fabriquer de 1080p : le 720p reste une bonne qualité pour YouTube.</p>
+      <p id="export-estimation"></p>
+      <p class="avis">Pendant la fabrication, <strong>garde Omni-Vidéo ouverte</strong> : ne change pas d'application
+         et ne verrouille pas la tablette (Omni-Vidéo garde l'écran allumé). Pour une longue vidéo,
+         branche la tablette sur son chargeur.</p>
+      <p class="erreur" id="export-probleme" hidden></p>
+      <div class="bloc-dernier" id="export-dernier" hidden>
+        <p id="export-dernier-texte"></p>
+        <button type="button" class="bouton large" data-action="export-retrouver">
+          <svg class="icone" aria-hidden="true"><use href="#i-film"/></svg>Retrouver cette vidéo
+        </button>
+      </div>
+      <div class="rangee-2">
+        <button type="submit" class="bouton" value="fermer">Annuler</button>
+        <button type="button" class="bouton bouton-principal" data-action="export-lancer" id="export-lancer">
+          <svg class="icone" aria-hidden="true"><use href="#i-film"/></svg>Fabriquer
+        </button>
+      </div>
+    </div>
+
+    <!-- 2. La fabrication en cours -->
+    <div class="export-etape" data-etape="travail" hidden>
+      <h2>Fabrication en cours…</h2>
+      <p class="export-pourcent mono" id="export-pourcent" aria-live="polite">0 %</p>
+      <div class="barre-progression" role="progressbar" aria-labelledby="export-pourcent" aria-valuemin="0" aria-valuemax="100" id="export-barre">
+        <span id="export-barre-remplie"></span>
+      </div>
+      <p class="mono" id="export-detail"></p>
+      <p class="mono" id="export-temps"></p>
+      <p class="avis"><strong>Garde Omni-Vidéo ouverte</strong> et la tablette allumée. Tu peux la poser :
+         la vidéo se fabrique toute seule.</p>
+      <p class="avis attention-douce" id="export-quitte" hidden>Tu as quitté Omni-Vidéo un moment : la fabrication
+         a pu ralentir ou se mettre en pause. Elle reprend maintenant.</p>
+      <button type="button" class="bouton large" data-action="export-arreter">
+        <svg class="icone" aria-hidden="true"><use href="#i-stop"/></svg><span>Arrêter la fabrication</span>
+      </button>
+    </div>
+
+    <!-- 3. La vidéo est prête -->
+    <div class="export-etape" data-etape="termine" hidden>
+      <h2>Ta vidéo est prête ✓</h2>
+      <p class="mono" id="export-bilan"></p>
+      <ul class="export-avertissements" id="export-avertissements" hidden></ul>
+      <button type="button" class="bouton bouton-principal grand" data-action="export-enregistrer">
+        <svg class="icone" aria-hidden="true"><use href="#i-telecharger"/></svg>Enregistrer dans la tablette
+      </button>
+      <p class="aide">Elle arrive dans le dossier « Téléchargements ». Ensuite, dans l'application YouTube,
+         touche « + », puis « Importer une vidéo », et choisis-la.</p>
+      <button type="button" class="bouton grand" data-action="export-partager" id="export-partager" hidden>
+        <svg class="icone" aria-hidden="true"><use href="#i-partager"/></svg>Partager (YouTube, Drive…)
+      </button>
+      <div class="bloc-dernier">
+        <p class="aide">Omni-Vidéo garde une copie de la vidéo (<span id="export-poids"></span>) jusqu'à la prochaine
+           fabrication. Une fois la vidéo enregistrée, tu peux libérer cette place.</p>
+        <button type="button" class="bouton large" data-action="export-liberer">
+          <svg class="icone" aria-hidden="true"><use href="#i-poubelle"/></svg><span>Libérer la place</span>
+        </button>
+      </div>
+      <button type="submit" class="bouton large" value="fermer">Fermer</button>
+    </div>
+
+    <!-- 4. Un souci -->
+    <div class="export-etape" data-etape="erreur" hidden>
+      <h2 id="export-erreur-titre">La vidéo n'a pas pu être fabriquée</h2>
+      <p id="export-erreur-texte"></p>
+      <p class="aide">Ton projet, lui, est intact.</p>
+      <div class="rangee-2">
+        <button type="submit" class="bouton" value="fermer">Fermer</button>
+        <button type="button" class="bouton bouton-principal" data-action="export-reglages">Réessayer</button>
+      </div>
     </div>
   </form>
 </dialog>

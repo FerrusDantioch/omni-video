@@ -12,7 +12,7 @@ Vérifier ma tablette, À propos.
 ## Construction par étapes
 
 0 fondations ✅ · a import et lecture ✅ · b chronologie ✅ · c texte et images ✅ ·
-d audio ✅ · e transitions ✅ · f sous-titres ✅ · g export MP4 · h hors ligne et
+d audio ✅ · e transitions ✅ · f sous-titres ✅ · g export MP4 ✅ · h hors ligne et
 installation. Après chaque étape : expliquer comment tester sur la tablette.
 À la fin : ajouter Omni-Vidéo au portfolio (`omni-systeme/index.html` et son
 README), dans le groupe « Création de contenu ».
@@ -59,8 +59,38 @@ README), dans le groupe « Création de contenu ».
   `grid-template-columns: minmax(0, 1fr)` et `min-width: 0`, sinon la bande
   élargit la page sans fin (boucle avec le ResizeObserver).
 - Mesuré : import d'une vidéo de 30 min (915 Mo) en 0,4 s, 18 Mo de mémoire JS.
-- La vidéo finale (étape g) sera écrite petit à petit dans le disque privé du
-  navigateur (OPFS) avec `StreamTarget`, jamais dans un `BufferTarget`.
+- La vidéo finale est écrite petit à petit dans le disque privé du
+  navigateur (OPFS, fichier `omnivideo-export.mp4`) avec `StreamTarget` +
+  `createWritable()`, `fastStart: false`. `BufferTarget` seulement si l'OPFS
+  manque, et pour moins de 300 Mo (`TAILLE_MAX_EN_MEMOIRE`).
+
+## Export (fabrication.js, export.js)
+
+- `fabriquerVideo()` avance **seconde par seconde** : d'abord le son de la
+  seconde (mélangé en Float32, 48 kHz stéréo, puis `AudioSampleSource`),
+  ensuite ses 30 images (`CanvasSource` sur une toile 1280×720 ou
+  1920×1080). Son et image avancent ensemble : le muxeur ne garde presque
+  rien en mémoire.
+- Images : `SourceImages` (une par segment, `VideoSampleSink.samples()`,
+  lecture dans l'ordre, deux `VideoSample` au plus, toujours `close()`),
+  `drawWithFit` (contain / cover = « contenir » / « remplir »), opacité et
+  décalage de `Montage.etat()`, puis `Rendu.dessiner()` (calques et
+  sous-titres). `Rendu.preparerImages()` avant de commencer.
+- Son : `SourceSon` (une par segment ou par piste, `AudioBufferSink.buffers()`,
+  ré-échantillonnage linéaire, volume recalculé tous les 128 échantillons
+  avec `Montage.etat().son × clip.volume` et `PistesAudio.volumeA()`,
+  `positionA()` pour les musiques qui recommencent). Plan B pour une musique
+  que Mediabunny ne décode pas : `decodeAudioData` (fichier < 150 Mo).
+- AAC : `canEncodeAudio('aac')` ; sinon chargement à la demande de
+  `mediabunny-aac-encoder.min.js` (MPL-2.0 + encodeur AAC de FFmpeg en LGPL,
+  voir CREDITS.md) puis `registerAacEncoder()`. Ne jamais le charger d'office.
+- Pendant l'export (`Export.enCours`) : `Veille`, fenêtre impossible à
+  fermer (cancel/close), retour arrière bloqué (popstate dans app.js),
+  `beforeunload`, et l'aperçu lâche ses vidéos (`Lecteur.vider()`), car une
+  tablette n'a que quelques décodeurs vidéo. La future bannière « Mettre à
+  jour » (étape h) ne doit jamais s'afficher pendant un export.
+- Vitesse mémorisée par qualité (`omnivideo-vitesse-720p/1080p`, secondes de
+  fabrication par seconde de vidéo) pour annoncer le temps avant de lancer.
 
 ## Données
 

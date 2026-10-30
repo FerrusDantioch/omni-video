@@ -12,7 +12,7 @@
 
 /* Numéro de version affiché dans « À propos ». À changer à chaque
    nouvelle version publiée. */
-const VERSION = '0.6.0';
+const VERSION = '0.7.0';
 
 /* ---------- 1. Navigation entre les écrans ----------
    Chaque écran est une <section class="vue" data-vue="…">.
@@ -69,7 +69,15 @@ function revenir() {
 }
 
 // Bouton « retour » de la tablette (ou geste de retour)
-window.addEventListener('popstate', () => afficherVue(vueDepuisAdresse()));
+window.addEventListener('popstate', () => {
+  // Pendant la fabrication de la vidéo, on reste sur le projet
+  if (Export.enCours) {
+    history.pushState({ omniVideo: true }, '', '#projet');
+    Message.montrer('Patiente : ta vidéo est en cours de fabrication.');
+    return;
+  }
+  afficherVue(vueDepuisAdresse());
+});
 
 
 /* ---------- 2. Les boutons ----------
@@ -174,7 +182,17 @@ const ACTIONS = {
   'supprimer-tous-sous-titres': (b) => SousTitres.supprimerTous(b),
   'style-sous-titres':         (b) => SousTitres.changerStyle(b.dataset.reglage, b.dataset.valeur),
   'decaler-sous-titres':       (b) => SousTitres.decaler(Number(b.dataset.secondes)),
-  'enregistrer-srt':           () => SousTitres.enregistrerSrt()
+  'enregistrer-srt':           () => SousTitres.enregistrerSrt(),
+
+  // Fabriquer la vidéo finale
+  'ouvrir-export':     () => Export.ouvrir(),
+  'export-lancer':     () => Export.lancer(),
+  'export-arreter':    (b) => Export.arreter(b),
+  'export-enregistrer': () => Export.enregistrer(),
+  'export-partager':   () => Export.partager(),
+  'export-liberer':    (b) => Export.liberer(b),
+  'export-retrouver':  () => Export.retrouver(),
+  'export-reglages':   () => Export.ouvrir()
 };
 
 document.addEventListener('click', (evenement) => {
@@ -226,6 +244,7 @@ async function demarrer() {
   Incrustations.initialiser();
   PistesAudio.initialiser();
   SousTitres.initialiser();
+  Export.initialiser();
   // Les polices sont chargées tout de suite (la toile ne les attend pas)
   Rendu.chargerPolices().then(() => Incrustations.redessiner(true));
 

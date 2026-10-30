@@ -23,7 +23,7 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
 | d. Audio | Musique de fond (fondus automatiques, répétée si trop courte), voix off enregistrée au micro pendant que la vidéo défile, volume de chaque musique, voix et clip | ✅ |
 | e. Transitions | Fondu au noir, fondu enchaîné, glissement (0,5 / 1 / 2 s), entre deux clips ou partout ; fondu au début et à la fin de la vidéo | ✅ |
 | f. Sous-titres | Saisie à la main, import .srt / .vtt (accents compris), apparence (taille, place, fond, couleur), décalage de tous les sous-titres, enregistrement en .srt ; incrustés dans l'image | ✅ |
-| g. Export MP4 | H.264 + AAC, 16:9 ou 9:16, 720p ou 1080p, progression, annulation | à venir |
+| g. Export MP4 | H.264 + AAC, 16:9 ou 9:16, 720p ou 1080p, 30 images par seconde ; progression, temps restant, arrêt ; écran gardé allumé ; enregistrement dans la tablette ou partage | ✅ |
 | h. Hors ligne | Service worker, installation sur l'écran d'accueil, export / import de projet | à venir |
 
 ### Bon à savoir
@@ -57,10 +57,53 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
   exemple). Les sous-titres sont incrustés dans l'image de la vidéo finale ;
   « Enregistrer en fichier .srt » donne en plus un fichier à envoyer sur
   YouTube, si vous préférez des sous-titres que le spectateur peut masquer.
+- **Fabriquer la vidéo** (bouton violet en haut de l'écran du projet) :
+  choisissez la forme et la qualité (1080p conseillée pour YouTube, 720p plus
+  rapide), puis « Fabriquer ». Gardez Omni-Vidéo ouverte au premier plan
+  pendant la fabrication : l'écran reste allumé tout seul. À la fin,
+  « Enregistrer dans la tablette » met la vidéo dans « Téléchargements » ;
+  il ne reste qu'à l'envoyer depuis l'application YouTube. La vidéo est
+  d'abord écrite dans un espace privé du navigateur : prévoyez **deux fois
+  sa taille** en place libre (une fois pour la fabrication, une fois pour
+  l'enregistrement), puis touchez « Libérer la place ».
 - **Le test de la tablette** (bouton « Vérifier ma tablette ») indique ce qui
   fonctionne : lecture des vidéos, fabrication du MP4, place disponible,
   mémoire, micro…
 - **Navigateur conseillé** : Google Chrome à jour (version 107 ou plus).
+
+## Essais de l'export (limites mesurées)
+
+Essais faits sur un ordinateur de test (Chromium sous Linux, 4 cœurs, **sans
+puce vidéo** : tout est calculé par le processeur). Montage : une vidéo
+1080p, un titre affiché tout le long, un sous-titre toutes les 6 secondes,
+une musique de fond répétée, fondus au début et à la fin.
+
+| Durée | Qualité | Temps de fabrication | Poids du fichier | Mémoire du navigateur |
+|---|---|---|---|---|
+| 1 min | 1080p | 35 s | 58 Mo | 1,4 Go |
+| 5 min | 1080p | 2 min 56 s | 290 Mo | 1,4 à 1,7 Go |
+| 15 min | 1080p | 8 min 36 s | 869 Mo | stable |
+| 30 min | 1080p | 16 min 39 s | 1,7 Go | 1,4 Go, stable |
+| 30 min | 720p | 15 min 9 s | 1,1 Go | 1,3 Go, stable |
+
+Ce que montrent ces essais :
+
+- **La mémoire ne grossit pas avec la durée** : la vidéo est écrite petit à
+  petit sur le disque. La mémoire JavaScript reste sous 31 Mo. Une vidéo de
+  30 minutes ne prend pas plus de mémoire qu'une vidéo de 1 minute.
+- **La vraie limite est la place libre** : il faut environ 60 Mo par minute
+  en 1080p (37 Mo en 720p), et **deux fois** ce poids pendant
+  l'enregistrement dans la tablette. Omni-Vidéo vérifie la place avant de
+  commencer et explique le souci s'il en manque. En navigation privée,
+  Chrome limite fortement cette place : l'essai de 30 minutes s'y est arrêté
+  vers 1,1 Go, avec le message prévu.
+- **Fichiers vérifiés** : bonne durée (au centième de seconde), 30 images
+  par seconde sans image perdue (54 000 images pour 30 minutes), son AAC
+  48 kHz stéréo, image fidèle à l'originale jusqu'à la dernière minute.
+- **Sur la tablette**, la vitesse dépendra de sa puce vidéo : avec elle,
+  c'est souvent plus rapide que ci-dessus ; sans elle, plus lent. Omni-Vidéo
+  retient la vitesse de la dernière fabrication et annonce ensuite le temps
+  avant de commencer.
 
 ## Les fichiers
 
@@ -84,6 +127,9 @@ pouvoir les envoyer depuis un téléphone ou une tablette.
 | `incrustations.js` | Les onglets du panneau, la liste et l'éditeur des textes et images incrustées, le déplacement au doigt |
 | `audio.js` | La musique de fond et les voix off (lecture avec l'aperçu, enregistrement au micro, onglet « Son ») |
 | `sous-titres.js` | Les sous-titres : lecture des fichiers .srt / .vtt, éditeur, liste, apparence, enregistrement en .srt |
+| `fabrication.js` | La fabrication de la vidéo finale : mélange du son, dessin de chaque image, écriture du MP4 |
+| `export.js` | La fenêtre « Fabriquer la vidéo » : réglages, progression, vidéo prête |
+| `mediabunny-aac-encoder.min.js` | L'encodeur AAC de secours (seulement si la tablette ne sait pas fabriquer le son AAC ; ne pas modifier) |
 | `projets.js` | La liste des projets, la sauvegarde automatique, l'écran du projet |
 | `mediabunny.min.js` | La bibliothèque vidéo Mediabunny (ne pas modifier) |
 | `logo.svg` | Le logo : le dé à vingt faces de l'Omni-système |
@@ -92,6 +138,7 @@ pouvoir les envoyer depuis un téléphone ou une tablette.
 | `CREDITS.md` | Les éléments créés par d'autres, et leur licence |
 | `LICENCE-MEDIABUNNY.txt` | La licence de Mediabunny (MPL-2.0) |
 | `POLICES-OFL.txt` | La licence des polices |
+| `LICENCE-LGPL-FFMPEG.txt` | La licence de l'encodeur AAC de FFmpeg (GNU LGPL 2.1) |
 
 ---
 

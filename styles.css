@@ -974,6 +974,30 @@ textarea:focus { border-color: var(--accent); outline: none; }
 .carte-piste-voix { border-left-color: var(--danger); }
 .carte-piste .rangee-2 .bouton { min-height: 52px; font-size: 0.95rem; padding: 6px 8px; }
 
+/* ---------- Fenêtre « Fabriquer la vidéo » ---------- */
+.export-etape { display: grid; gap: 14px; }
+.export-pourcent { font-size: 2.6rem; font-weight: 700; text-align: center; color: var(--halo); }
+.barre-progression {
+  height: 22px;
+  border-radius: 11px;
+  background: var(--fond);
+  border: 2px solid var(--trait);
+  overflow: hidden;
+}
+.barre-progression span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  border-radius: 9px;
+  transition: width 400ms ease;
+}
+#export-bilan { white-space: pre-line; }
+.bloc-dernier { display: grid; gap: 10px; padding: 12px; border: 2px dashed var(--trait); border-radius: 12px; }
+.export-avertissements { margin: 0; padding: 10px 14px 10px 30px; background: var(--surface-2); border-radius: 12px; font-size: 0.95rem; }
+.attention-douce { border-left: 4px solid var(--or); }
+.choix label:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
+
 /* Onglet « Sous-titres » */
 .st-decalages { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .st-decalages .bouton { min-height: 52px; padding: 6px 4px; font-family: var(--f-chiffres); }

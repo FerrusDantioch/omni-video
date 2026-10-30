@@ -225,8 +225,8 @@ class SourceSon {
 /* ---------- L'encodeur AAC de secours ----------
    Certaines tablettes (et le navigateur de test) ne savent pas fabriquer
    le son AAC demandé par YouTube. On charge alors l'encodeur de secours
-   fourni avec l'application (mediabunny-aac-encoder.min.js, voir
-   CREDITS.md). Il n'est chargé que si besoin : 1 Mo de moins sinon. */
+   fourni avec l'application (encodeur-aac.js et encodeur-aac.wasm :
+   l'encodeur de VisualOn, voir CREDITS.md). Il n'est chargé que si besoin. */
 let aacDeSecours = false;
 
 async function preparerAac() {
@@ -235,13 +235,12 @@ async function preparerAac() {
   if (!aacDeSecours) {
     await new Promise((reussir, echouer) => {
       const script = document.createElement('script');
-      script.src = './mediabunny-aac-encoder.min.js';
+      script.src = './encodeur-aac.js';
       script.onload = reussir;
       script.onerror = () => echouer(new Error('Encodeur AAC de secours introuvable'));
       document.head.appendChild(script);
     });
-    MediabunnyAacEncoder.registerAacEncoder();
-    aacDeSecours = true;
+    aacDeSecours = true;   // encodeur-aac.js se présente tout seul à Mediabunny
   }
   return Mediabunny.canEncodeAudio('aac', options);
 }

@@ -81,9 +81,15 @@ README), dans le groupe « Création de contenu ».
   avec `Montage.etat().son × clip.volume` et `PistesAudio.volumeA()`,
   `positionA()` pour les musiques qui recommencent). Plan B pour une musique
   que Mediabunny ne décode pas : `decodeAudioData` (fichier < 150 Mo).
-- AAC : `canEncodeAudio('aac')` ; sinon chargement à la demande de
-  `mediabunny-aac-encoder.min.js` (MPL-2.0 + encodeur AAC de FFmpeg en LGPL,
-  voir CREDITS.md) puis `registerAacEncoder()`. Ne jamais le charger d'office.
+- AAC : `canEncodeAudio('aac')` ; sinon chargement à la demande
+  d'`encodeur-aac.js` (ne jamais le charger d'office), qui s'enregistre
+  (`Mediabunny.registerEncoder`) comme `CustomAudioEncoder` et utilise
+  `encodeur-aac.wasm` : vo-aacenc 0.1.3 (VisualOn, Apache 2.0, AUCUN
+  morceau de FFmpeg, choix de l'utilisatrice) compilé par clang/wasm-ld
+  avec la passerelle `encodeur-aac.c` (recette dans son en-tête). Trames
+  AAC brutes de 1024 échantillons, horodatées avec −1600 échantillons
+  (`AVANCE_AAC`, retard mesuré de l'encodeur) : son et image calés au
+  millième de seconde (vérifié avec un clic et un flash à 2,000 s).
 - Pendant l'export (`Export.enCours`) : `Veille`, fenêtre impossible à
   fermer (cancel/close), retour arrière bloqué (popstate dans app.js),
   `beforeunload`, et l'aperçu lâche ses vidéos (`Lecteur.vider()`), car une

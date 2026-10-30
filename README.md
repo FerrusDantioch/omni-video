@@ -139,7 +139,8 @@ pouvoir les envoyer depuis un téléphone ou une tablette.
 | `sous-titres.js` | Les sous-titres : lecture des fichiers .srt / .vtt, éditeur, liste, apparence, enregistrement en .srt |
 | `fabrication.js` | La fabrication de la vidéo finale : mélange du son, dessin de chaque image, écriture du MP4 |
 | `export.js` | La fenêtre « Fabriquer la vidéo » : réglages, progression, vidéo prête |
-| `mediabunny-aac-encoder.min.js` | L'encodeur AAC de secours (seulement si la tablette ne sait pas fabriquer le son AAC ; ne pas modifier) |
+| `encodeur-aac.js` `encodeur-aac.wasm` | L'encodeur AAC de secours, celui de VisualOn (seulement si la tablette ne sait pas fabriquer le son AAC ; ne pas modifier le .wasm) |
+| `encodeur-aac.c` | La passerelle de l'encodeur AAC, et la recette pour recompiler `encodeur-aac.wasm` |
 | `sauvegarde.js` | Sauvegarder un projet dans un fichier .omnivideo, et l'importer |
 | `sw.js` | Le « service worker » : range l'application dans la tablette pour qu'elle marche sans Internet |
 | `manifest.json` | La carte d'identité de l'application installée (nom, icônes, couleurs) |
@@ -152,7 +153,7 @@ pouvoir les envoyer depuis un téléphone ou une tablette.
 | `CREDITS.md` | Les éléments créés par d'autres, et leur licence |
 | `LICENCE-MEDIABUNNY.txt` | La licence de Mediabunny (MPL-2.0) |
 | `POLICES-OFL.txt` | La licence des polices |
-| `LICENCE-LGPL-FFMPEG.txt` | La licence de l'encodeur AAC de FFmpeg (GNU LGPL 2.1) |
+| `LICENCE-APACHE-VO-AACENC.txt` | La licence de l'encodeur AAC de VisualOn (Apache 2.0) |
 
 ---
 

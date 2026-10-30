@@ -44,7 +44,8 @@ const Projets = {
       if (voix) morceaux.push(voix + ' voix off');
       return '<li class="carte projet-carte">' +
         '<h3 class="projet-nom">' + proteger(p.nom) + '</h3>' +
-        '<p class="projet-resume">' + proteger(morceaux.join(' · ')) + '<br>Modifié ' + proteger(dateEnMots(p.modifie)) + '</p>' +
+        '<p class="projet-resume">' + proteger(morceaux.join(' · ')) + '<br>Modifié ' + proteger(dateEnMots(p.modifie)) +
+          '<br>' + proteger(RappelSauvegarde.texteCarte(p)) + '</p>' +
         '<div class="projet-actions">' +
           '<button type="button" class="bouton bouton-principal" data-action="ouvrir-projet" data-id="' + proteger(p.id) + '">Ouvrir</button>' +
           '<button type="button" class="bouton" data-action="sauvegarder-projet" data-id="' + proteger(p.id) + '">' +
@@ -55,6 +56,7 @@ const Projets = {
       '</li>';
     }).join('');
     $('#projets-vide').hidden = this.liste.length > 0;
+    RappelSauvegarde.majBandeau(this.liste);
   },
 
   /* ---------- Créer un projet ---------- */
@@ -195,6 +197,7 @@ const Projets = {
       try {
         await Base.supprimerProjet(projet);
         projet.medias.forEach((m) => Medias.oublier(m.id));
+        RappelSauvegarde.oublier(projet.id);
         Message.montrer('Projet « ' + projet.nom + ' » supprimé. Tes vidéos sont toujours dans la tablette.');
       } catch (e) {
         Message.probleme("Le projet n'a pas pu être supprimé. Réessaie dans un instant.");

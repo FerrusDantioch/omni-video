@@ -285,6 +285,134 @@ const Capacites = {
 };
 
 
+/* ============================================================
+   « Place utilisée » (bas de l'écran « Vérifier ma tablette »)
+   Ce qu'Omni-Vidéo range dans la tablette, et des boutons pour effacer
+   ce qui ne sert plus. Les projets eux-mêmes ne sont jamais effacés ici :
+   on les supprime depuis l'accueil, après les avoir sauvegardés.
+   ⚠️ Le disque privé est partagé avec les autres applications du site :
+   on ne touche qu'aux fichiers dont le nom commence par « omnivideo- ».
+   ============================================================ */
+
+const Place = {
+  _tour: 0,   // pour ignorer un calcul dépassé par un plus récent
+
+  /* Mesure tout (quelques dixièmes de seconde : seules les tailles sont lues) */
+  async mesurer() {
+    const projets = await Base.lireProjets().catch(() => []);
+    const tailles = await Base.taillesFichiers().catch(() => new Map());
+    const utilises = new Set();
+    const parProjet = projets.map((p) => {
+      let octets = 0;
+      p.medias.forEach((m) => { utilises.add(m.id); octets += tailles.get(m.id) || 0; });
+      return { nom: p.nom, octets };
+    }).sort((a, b) => b.octets - a.octets);
+    // Fichiers rangés qui n'appartiennent plus à aucun projet
+    const oublies = [...tailles.keys()].filter((id) => !utilises.has(id));
+    const octetsOublies = oublies.reduce((somme, id) => somme + tailles.get(id), 0);
+
+    // Le disque privé : la copie de la dernière vidéo, et les morceaux
+    // d'une fabrication interrompue (ou d'anciens fichiers de travail)
+    let copie = 0, morceaux = 0;
+    const dossier = await DisquePrive.dossier();
+    if (dossier) {
+      try {
+        for await (const [nom, poignee] of dossier.entries()) {
+          if (poignee.kind !== 'file' || !nom.startsWith('omnivideo-')) continue;
+          const taille = (await poignee.getFile()).size;
+          if (nom === NOM_FICHIER_EXPORT) copie = taille; else morceaux += taille;
+        }
+      } catch (e) { /* on montre ce qu'on a pu mesurer */ }
+    }
+
+    let libre = null;
+    try {
+      const estimation = await avecDelai(navigator.storage.estimate(), 5000);
+      if (Number.isFinite(estimation.quota)) libre = Math.max(0, estimation.quota - (estimation.usage || 0));
+    } catch (e) { /* inconnu */ }
+    return { parProjet, oublies, octetsOublies, copie, morceaux, reprise: Reprise.lire(), libre };
+  },
+
+  async afficher() {
+    const tour = ++this._tour;
+    const liste = $('#place-liste');
+    if (!liste.children.length) liste.innerHTML = '<li class="vide">Calcul en cours…</li>';
+    const m = await this.mesurer();
+    if (tour !== this._tour) return;
+
+    const ligne = (titre, octets, explication, quoi) =>
+      '<li class="place-ligne">' +
+        '<div class="place-entete"><span class="test-titre">' + proteger(titre) + '</span>' +
+        '<span class="mono">' + proteger(tailleEnTexte(octets)) + '</span></div>' +
+        '<p class="test-explication">' + proteger(explication) + '</p>' +
+        (quoi ? '<button type="button" class="bouton" data-action="place-effacer" data-quoi="' + quoi + '">' +
+          '<svg class="icone" aria-hidden="true"><use href="#i-poubelle"/></svg>Effacer</button>' : '') +
+      '</li>';
+
+    const lignes = [];
+    const totalProjets = m.parProjet.reduce((s, p) => s + p.octets, 0);
+    const details = m.parProjet.filter((p) => p.octets > 0).slice(0, 5)
+      .map((p) => '« ' + p.nom + ' » : ' + tailleEnTexte(p.octets)).join(' · ');
+    lignes.push(ligne('Tes projets', totalProjets,
+      'Les images, musiques et voix off gardées par Omni-Vidéo' + (details ? ' (' + details + ')' : '') +
+      '. Tes vidéos, elles, restent dans la galerie et ne comptent pas ici. Pour libérer cette place, ' +
+      'sauvegarde puis supprime les projets terminés, depuis l\'accueil.'));
+    if (m.copie) {
+      lignes.push(ligne('Dernière vidéo fabriquée', m.copie,
+        'Une copie est gardée pour pouvoir l\'enregistrer ou la partager plus tard. Si elle est déjà dans ' +
+        '« Téléchargements » ou sur YouTube, tu peux l\'effacer.', 'copie'));
+    }
+    if (m.morceaux) {
+      const r = m.reprise;
+      lignes.push(ligne(r ? 'Fabrication interrompue' : 'Fichiers de travail', m.morceaux,
+        r ? 'Les morceaux déjà faits de « ' + r.nom + ' » (' + Math.round(Reprise.avancement(r) * 100) +
+            ' % fait). Si tu les effaces, la prochaine fabrication repartira du début.'
+          : 'Des restes d\'une ancienne fabrication, qui ne servent plus.', 'morceaux'));
+    }
+    if (m.oublies.length) {
+      lignes.push(ligne('Fichiers oubliés', m.octetsOublies,
+        'Des images ou des sons qui n\'appartiennent plus à aucun projet (après un souci pendant un import, par exemple).',
+        'oublies'));
+    }
+    liste.innerHTML = lignes.join('');
+    ecrireTexte($('#place-libre'), m.libre === null ? '' : 'Place encore libre pour Omni-Vidéo : environ ' + tailleEnTexte(m.libre) + '.');
+  },
+
+  effacer(quoi, bouton) {
+    armerBouton(bouton, 'Effacer ? Touche encore', async () => {
+      if (Export.enCours) { Message.montrer('Patiente : une vidéo est en cours de fabrication.'); return; }
+      const avant = await this.mesurer();
+      if (quoi === 'copie') {
+        await DisquePrive.effacer();
+        Export._fichier = null;
+      } else if (quoi === 'morceaux') {
+        await Reprise.effacer();
+        // Les autres fichiers de travail d'Omni-Vidéo (jamais ceux des autres applications)
+        const dossier = await DisquePrive.dossier();
+        if (dossier) {
+          const noms = [];
+          try {
+            for await (const [nom, poignee] of dossier.entries()) {
+              if (poignee.kind === 'file' && nom.startsWith('omnivideo-') && nom !== NOM_FICHIER_EXPORT) noms.push(nom);
+            }
+          } catch (e) { /* tant pis */ }
+          for (const nom of noms) await dossier.removeEntry(nom).catch(() => {});
+        }
+      } else if (quoi === 'oublies') {
+        // Mesure refaite juste avant d'effacer, projet fermé : un fichier
+        // tout juste ajouté à un projet n'est jamais pris pour un oublié
+        if (Projets.courant) return;
+        for (const id of avant.oublies) await Base.supprimerFichier(id).catch(() => {});
+      }
+      await this.afficher();
+      const apres = await this.mesurer();
+      const gagne = (avant.copie + avant.morceaux + avant.octetsOublies) - (apres.copie + apres.morceaux + apres.octetsOublies);
+      Message.montrer('Place libérée ✓' + (gagne > 0 ? ' (' + tailleEnTexte(gagne) + ')' : ''));
+    });
+  }
+};
+
+
 /* Réglages d'encodage H.264 utilisés pour le test (profil « High »,
    celui que YouTube recommande). */
 function configEncodage(largeur, hauteur, debit) {

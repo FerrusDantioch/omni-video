@@ -58,6 +58,8 @@ const Sauvegarde = {
     new DataView(longueur.buffer).setUint32(0, description.length, true);
     const sauvegarde = new Blob([MAGIE_SAUVEGARDE, longueur, description, ...contenus], { type: 'application/octet-stream' });
     telechargerFichier(sauvegarde, nomDeFichier(projet.nom) + EXTENSION_SAUVEGARDE);
+    RappelSauvegarde.noter(projet.id);
+    if (vueActive === 'accueil') Projets.afficherListe();
 
     const videos = projet.medias.filter((m) => m.type === 'video').length;
     Message.montrer('Sauvegarde enregistrée dans « Téléchargements » ✓ (' + tailleEnTexte(sauvegarde.size) + ')' +
@@ -127,11 +129,115 @@ const Sauvegarde = {
       Message.probleme(messageErreurStockage(e));
       return;
     }
+    // Ce projet vient d'une sauvegarde : il en a donc déjà une
+    RappelSauvegarde.noter(projet.id);
 
     Persistance.demander();
     await Projets.afficherListe();
     const videos = projet.medias.filter((m) => m.type === 'video').length;
     Message.montrer('Projet « ' + projet.nom + ' » importé ✓' +
       (videos ? ' En l\'ouvrant, touche « Retrouver mes vidéos » pour lui redonner ses vidéos.' : ''));
+  }
+};
+
+
+/* ============================================================
+   Le rappel de sauvegarde
+   Les projets ne vivent que dans le navigateur de la tablette : si Chrome
+   efface ses données, ou si la tablette tombe en panne, ils sont perdus.
+   Un fichier « .omnivideo » rangé ailleurs (clé USB, ordinateur, Drive…)
+   les protège. Omni-Vidéo retient donc la date de la dernière sauvegarde
+   de chaque projet, et le rappelle sur l'accueil quand un projet a des
+   changements qui ne sont dans aucune sauvegarde depuis plus d'une
+   semaine.
+   ============================================================ */
+
+const CLE_DATES_SAUVEGARDE = 'omnivideo-sauvegardes';      // { numéro du projet: date }
+const CLE_RAPPEL_REPOUSSE = 'omnivideo-rappel-repousse';   // date jusqu'à laquelle on se tait
+const JOURS_AVANT_RAPPEL = 7;
+const JOURS_REPORT_RAPPEL = 3;
+const UN_JOUR = 24 * 3600 * 1000;
+
+const RappelSauvegarde = {
+  _lire() {
+    try {
+      const dates = JSON.parse(lireReglage(CLE_DATES_SAUVEGARDE) || '{}');
+      return dates && typeof dates === 'object' ? dates : {};
+    } catch (e) {
+      return {};
+    }
+  },
+
+  _ecrire(dates) {
+    ecrireReglage(CLE_DATES_SAUVEGARDE, JSON.stringify(dates));
+  },
+
+  /* Date de la dernière sauvegarde d'un projet (0 = jamais) */
+  date(id) {
+    return Number(this._lire()[id]) || 0;
+  },
+
+  /* Appelé à chaque sauvegarde (et à l'import d'une sauvegarde) */
+  noter(id) {
+    const dates = this._lire();
+    dates[id] = Date.now();
+    this._ecrire(dates);
+  },
+
+  /* Le projet est supprimé : on oublie sa date */
+  oublier(id) {
+    const dates = this._lire();
+    delete dates[id];
+    this._ecrire(dates);
+  },
+
+  /* Ce projet a-t-il des changements à mettre à l'abri ? Un projet vide
+     (sans aucun clip) ne compte pas. La « référence » est la dernière
+     sauvegarde, ou la création du projet s'il n'en a jamais eu. */
+  _enRetard(p) {
+    if (!p.clips.length) return 0;
+    const derniere = this.date(p.id);
+    if (p.modifie <= derniere) return 0;
+    const reference = derniere || p.cree;
+    const jours = (Date.now() - reference) / UN_JOUR;
+    return jours >= JOURS_AVANT_RAPPEL ? jours : 0;
+  },
+
+  /* Petit texte pour la carte du projet sur l'accueil */
+  texteCarte(p) {
+    const derniere = this.date(p.id);
+    if (!derniere) return 'Jamais sauvegardé dans un fichier';
+    return 'Dernière sauvegarde ' + dateEnMots(derniere) + (p.modifie > derniere ? ' (changé depuis)' : '');
+  },
+
+  /* Le bandeau de l'accueil, recalculé à chaque affichage de la liste */
+  majBandeau(liste) {
+    const bandeau = $('#bandeau-sauvegarde');
+    const repousse = Number(lireReglage(CLE_RAPPEL_REPOUSSE)) || 0;
+    const enRetard = liste
+      .map((p) => ({ p, jours: this._enRetard(p) }))
+      .filter((x) => x.jours > 0)
+      .sort((a, b) => b.jours - a.jours);
+    if (!enRetard.length || Date.now() < repousse) { bandeau.hidden = true; return; }
+
+    const { p, jours } = enRetard[0];
+    const nbJours = Math.floor(jours);
+    ecrireTexte($('#rappel-sauvegarde-titre'), 'Pense à sauvegarder « ' + p.nom + ' »');
+    ecrireTexte($('#rappel-sauvegarde-texte'),
+      (this.date(p.id)
+        ? 'Sa dernière sauvegarde date de ' + nbJours + ' jours, et tu l\'as changé depuis.'
+        : 'Tu y travailles depuis ' + nbJours + ' jours et il n\'a jamais été sauvegardé.') +
+      (enRetard.length > 1 ? ' ' + (enRetard.length - 1) + ' autre' + (enRetard.length > 2 ? 's projets aussi' : ' projet aussi') + '.' : '') +
+      ' Tes projets ne sont gardés que dans cette tablette : range le fichier de sauvegarde ailleurs ' +
+      '(ordinateur, clé USB, Drive…) pour ne jamais les perdre.');
+    $('#rappel-sauvegarde-bouton').dataset.id = p.id;
+    bandeau.hidden = false;
+  },
+
+  /* « Plus tard » : plus de rappel pendant trois jours */
+  repousser() {
+    ecrireReglage(CLE_RAPPEL_REPOUSSE, String(Date.now() + JOURS_REPORT_RAPPEL * UN_JOUR));
+    $('#bandeau-sauvegarde').hidden = true;
+    annoncer('D\'accord. Omni-Vidéo te le rappellera dans ' + JOURS_REPORT_RAPPEL + ' jours.');
   }
 };

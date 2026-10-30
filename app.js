@@ -12,7 +12,7 @@
 
 /* Numéro de version affiché dans « À propos ». À changer à chaque
    nouvelle version publiée. */
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 
 /* ---------- 1. Navigation entre les écrans ----------
    Chaque écran est une <section class="vue" data-vue="…">.
@@ -42,7 +42,7 @@ function afficherVue(nom) {
   switch (nom) {
     case 'accueil':  Projets.afficherListe(); Capacites.afficherBandeau(); MiseAJour.majBandeau(); break;
     case 'projet':   Projets.afficherProjet(); break;
-    case 'tablette': Capacites.afficher(); break;
+    case 'tablette': Capacites.afficher(); Place.afficher(); break;
   }
 
   window.scrollTo(0, 0);
@@ -89,6 +89,7 @@ const ACTIONS = {
   'ouvrir-projet':    (b) => Projets.ouvrir(b.dataset.id),
   'sauvegarder-projet': (b) => Sauvegarde.exporter(b.dataset.id),
   'importer-projet':  () => Sauvegarde.choisirFichier(),
+  'rappel-plus-tard': () => RappelSauvegarde.repousser(),
   'mettre-a-jour':    (b) => MiseAJour.appliquer(b),
   'plus-tard':        () => MiseAJour.repousser(),
   'installer':        () => Installation.installer(),
@@ -101,8 +102,10 @@ const ACTIONS = {
     Capacites.afficher();
     await Capacites.tester();
     Capacites.afficher();
+    Place.afficher();
     Message.montrer('Test terminé.');
   },
+  'place-effacer':    (b) => Place.effacer(b.dataset.quoi, b),
   'renommer-projet':  () => Projets.renommer(),
   'changer-format':   () => Projets.changerFormat(),
   'importer':         (b) => Projets.choisirFichiers(b.dataset.type),
@@ -135,6 +138,7 @@ const ACTIONS = {
   'duree-image':      (b) => Chronologie.dureeImage(Number(b.dataset.secondes)),
   'supprimer-clip':   (b) => Chronologie.supprimerClip(b),
   'dupliquer-clip':   () => Chronologie.dupliquerClip(),
+  'enlever-blancs':   () => Blancs.ouvrir(),
   'vitesse-clip':     (b) => Chronologie.vitesseClip(Number(b.dataset.vitesse)),
   'mouvement-clip':   (b) => Chronologie.mouvementClip(b.dataset.mouvement),
   'reglages-clip-origine': () => Chronologie.reglagesOrigine(),
@@ -376,6 +380,7 @@ async function demarrer() {
   Chapitres.initialiser();
   Guide.initialiser();
   IntroFin.initialiser();
+  Blancs.initialiser();
   Export.initialiser();
   Installation.initialiser();
 

@@ -24,7 +24,7 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
 | e. Transitions | Fondu au noir, fondu enchaîné, glissement (0,5 / 1 / 2 s), entre deux clips ou partout ; fondu au début et à la fin de la vidéo | ✅ |
 | f. Sous-titres | Saisie à la main, import .srt / .vtt (accents compris), apparence (taille, place, fond, couleur), décalage de tous les sous-titres, enregistrement en .srt ; incrustés dans l'image | ✅ |
 | g. Export MP4 | H.264 + AAC, 16:9 ou 9:16, 720p ou 1080p, 30 images par seconde ; progression, temps restant, arrêt ; écran gardé allumé ; enregistrement dans la tablette ou partage | ✅ |
-| h. Hors ligne | Service worker, installation sur l'écran d'accueil, export / import de projet | à venir |
+| h. Hors ligne | Fonctionne sans Internet après la première visite, installation sur l'écran d'accueil, mise à jour au choix (« Mettre à jour »), sauvegarde et import de projet (fichier .omnivideo) | ✅ |
 
 ### Bon à savoir
 
@@ -66,6 +66,16 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
   d'abord écrite dans un espace privé du navigateur : prévoyez **deux fois
   sa taille** en place libre (une fois pour la fabrication, une fois pour
   l'enregistrement), puis touchez « Libérer la place ».
+- **Sans Internet** : après la première visite, toute l'application est
+  rangée dans la tablette et s'ouvre même hors connexion. Le bandeau
+  « Installer » de l'accueil ajoute son icône sur l'écran d'accueil.
+  Quand une nouvelle version est publiée, un bandeau propose « Mettre à
+  jour » : rien ne change sans votre accord (et jamais pendant la
+  fabrication d'une vidéo).
+- **Sauvegarder un projet** (bouton « Sauvegarder » sur l'accueil) : un
+  fichier .omnivideo avec le montage, les images, les musiques et les voix
+  off. Les vidéos n'y sont pas (trop lourdes) : après « Importer une
+  sauvegarde de projet », on les redonne avec « Retrouver mes vidéos ».
 - **Le test de la tablette** (bouton « Vérifier ma tablette ») indique ce qui
   fonctionne : lecture des vidéos, fabrication du MP4, place disponible,
   mémoire, micro…
@@ -130,6 +140,10 @@ pouvoir les envoyer depuis un téléphone ou une tablette.
 | `fabrication.js` | La fabrication de la vidéo finale : mélange du son, dessin de chaque image, écriture du MP4 |
 | `export.js` | La fenêtre « Fabriquer la vidéo » : réglages, progression, vidéo prête |
 | `mediabunny-aac-encoder.min.js` | L'encodeur AAC de secours (seulement si la tablette ne sait pas fabriquer le son AAC ; ne pas modifier) |
+| `sauvegarde.js` | Sauvegarder un projet dans un fichier .omnivideo, et l'importer |
+| `sw.js` | Le « service worker » : range l'application dans la tablette pour qu'elle marche sans Internet |
+| `manifest.json` | La carte d'identité de l'application installée (nom, icônes, couleurs) |
+| `icon-192.png` `icon-512.png` `maskable-512.png` `apple-touch-icon.png` | Les icônes de l'application installée, tirées du logo |
 | `projets.js` | La liste des projets, la sauvegarde automatique, l'écran du projet |
 | `mediabunny.min.js` | La bibliothèque vidéo Mediabunny (ne pas modifier) |
 | `logo.svg` | Le logo : le dé à vingt faces de l'Omni-système |
@@ -161,29 +175,54 @@ GitHub redirige automatiquement l'ancienne adresse vers la nouvelle.
 
 1. Toujours dans **Settings**, menu de gauche → **Pages**.
 2. **Source** : `Deploy from a branch`.
-3. **Branch** : choisissez la branche qui contient l'application (pendant la
-   construction, c'est la branche de travail `ccr-a42e77ca-u3d99b` ; une fois
-   l'application terminée, ce sera `main`), dossier `/ (root)`. Touchez
+3. **Branch** : choisissez `main` (après avoir fusionné la branche de
+   travail `ccr-a42e77ca-u3d99b` dans `main`, voir plus bas), ou directement
+   la branche de travail pour l'essayer, dossier `/ (root)`. Touchez
    **Save**.
 4. Patientez 1 à 2 minutes, puis rechargez la page : l'adresse apparaît en
    haut. Ce sera : `https://ferrusdantioch.github.io/omni-video/`
 
 > ⚠️ GitHub Pages n'est gratuit que sur les dépôts **publics**.
 
-### 3. Ouvrir l'application sur la tablette
+### 3. Fusionner la branche de travail dans `main` (une fois l'application terminée)
 
-1. Ouvrez l'adresse dans **Chrome**.
+1. Sur la page du dépôt, un bandeau jaune propose **Compare & pull request**
+   pour la branche `ccr-a42e77ca-u3d99b` (sinon : onglet **Pull requests** →
+   **New pull request**, base `main`, compare `ccr-a42e77ca-u3d99b`).
+2. Touchez **Create pull request**, puis **Merge pull request** et
+   **Confirm merge**.
+3. Dans **Settings → Pages**, choisissez la branche `main`.
+
+### 4. Ouvrir et installer l'application sur la tablette
+
+1. Ouvrez l'adresse dans **Chrome**, avec une connexion Internet.
 2. Touchez **Vérifier ma tablette** pour voir ce que la tablette sait faire.
+3. Touchez **Installer** sur l'accueil (ou menu ⋮ de Chrome → **Ajouter à
+   l'écran d'accueil**). Si Chrome affiche « Cette appli est déjà
+   installée » alors qu'elle ne l'est pas, c'est une limite de Chrome quand
+   une autre application de `ferrusdantioch.github.io` est déjà installée :
+   choisissez alors « Créer un raccourci » (explication aussi dans À propos).
+4. Rouvrez-la une fois : « Vérifier ma tablette » doit dire « elle
+   fonctionne sans Internet ».
 
-L'installation sur l'écran d'accueil et le fonctionnement sans connexion
-arriveront à l'étape (h).
+### Publier une modification
 
-### Après une modification
+⚠️ **À chaque modification d'un fichier de l'application**, augmentez d'un
+cran le numéro en haut de `sw.js` :
 
-GitHub Pages se met à jour 1 à 2 minutes après chaque envoi. Sur la tablette,
-rechargez la page (tirez l'écran vers le bas dans Chrome). Si l'ancienne
-version reste affichée, attendez encore quelques minutes : GitHub garde les
-fichiers en mémoire jusqu'à 10 minutes.
+```js
+const CACHE = 'omni-video-v1';   // → 'omni-video-v2', puis v3…
+```
+
+et le numéro `VERSION` en haut d'`app.js` (affiché dans À propos). Si vous
+ajoutez un fichier, inscrivez-le aussi dans la liste `FICHIERS` de `sw.js`.
+Sans cela, les tablettes garderaient l'ancienne version.
+
+GitHub Pages se met à jour 1 à 2 minutes après chaque envoi. Sur la
+tablette, rouvrez Omni-Vidéo : un bandeau « Une nouvelle version est
+prête » apparaît sur l'accueil, touchez **Mettre à jour**. S'il n'apparaît
+pas encore, attendez quelques minutes (GitHub garde les fichiers en mémoire
+jusqu'à 10 minutes) et rouvrez l'application.
 
 ---
 

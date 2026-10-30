@@ -974,6 +974,11 @@ textarea:focus { border-color: var(--accent); outline: none; }
 .carte-piste-voix { border-left-color: var(--danger); }
 .carte-piste .rangee-2 .bouton { min-height: 52px; font-size: 0.95rem; padding: 6px 8px; }
 
+/* Les boutons d'un projet sur l'accueil, et les sauvegardes */
+.projet-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.projet-actions .bouton { flex: 1 1 140px; }
+.bloc-sauvegarde { display: grid; gap: 10px; }
+
 /* ---------- Fenêtre « Fabriquer la vidéo » ---------- */
 .export-etape { display: grid; gap: 14px; }
 .export-pourcent { font-size: 2.6rem; font-weight: 700; text-align: center; color: var(--halo); }

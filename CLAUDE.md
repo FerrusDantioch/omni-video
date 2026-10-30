@@ -13,7 +13,7 @@ Vérifier ma tablette, À propos.
 
 0 fondations ✅ · a import et lecture ✅ · b chronologie ✅ · c texte et images ✅ ·
 d audio ✅ · e transitions ✅ · f sous-titres ✅ · g export MP4 ✅ · h hors ligne et
-installation. Après chaque étape : expliquer comment tester sur la tablette.
+installation ✅. Après chaque étape : expliquer comment tester sur la tablette.
 À la fin : ajouter Omni-Vidéo au portfolio (`omni-systeme/index.html` et son
 README), dans le groupe « Création de contenu ».
 
@@ -162,16 +162,42 @@ README), dans le groupe « Création de contenu ».
 Toutes les applications sont servies depuis `ferrusdantioch.github.io` : elles
 partagent le même `localStorage`, le même IndexedDB et le même espace de
 caches. Tous les noms commencent par `omnivideo` (base, clés) ; le service
-worker (étape h) ne devra supprimer que les caches qui commencent par
-`omni-video-`, et vérifier à chaque ouverture que son cache est complet.
+worker (`sw.js`) ne supprime que les caches qui commencent par
+`omni-video-`, et vérifie à chaque ouverture que son cache est complet.
 Pas de `skipWaiting()` automatique : une mise à jour attend un appui sur
 « Mettre à jour », et jamais pendant un export.
 
+## Hors ligne, installation, sauvegardes (étape h)
+
+- `sw.js` : modèle d'Omni-Time. Cache `omni-video-vN`, ne supprime que les
+  caches `omni-video-*`, vérifie à chaque navigation que le cache est complet
+  (sinon le remplit), `{ cache: 'reload' }`, jamais de remplacement en
+  arrière-plan. `skipWaiting()` seulement au message `{ type: 'activer' }`.
+  Message `{ type: 'verifier' }` + MessageChannel → `{ complet, version }`
+  (utilisé par `etatHorsLigne()` d'app.js pour « Vérifier ma tablette »).
+- `MiseAJour` (app.js) : `#bandeau-mise-a-jour` sur l'accueil, « Plus
+  tard », caché pendant `Export.enCours` (et `Export` le rappelle à la fin).
+  Rechargement sur `controllerchange` seulement après « Mettre à jour ».
+- `Installation` (app.js) : `beforeinstallprompt` → `#bandeau-installer`.
+- Icônes tirées de `logo.svg` (fond `#14111d`, coins arrondis pour « any »,
+  logo à 76 % pour le « maskable »).
+- `sauvegarde.js` : fichier `.omnivideo` = `OMNIVIDEO-PROJET-1\n` + longueur
+  (uint32 LE) + JSON `{ format, version, application, date, projet,
+  fichiers: [{ id, taille, type }] }` + Blobs collés à la suite. Assemblé et
+  relu par `Blob`/`slice` (rien d'entier en mémoire). À l'import : NOUVEAUX
+  numéros pour le projet et ses médias (clips, calques, pistes renommés),
+  pour qu'une double importation ne partage jamais un fichier. Les vidéos ne
+  sont pas dans la sauvegarde (« Retrouver mes vidéos »).
+- `nomDeFichier()` enlève les accents : Chromium remplace sinon le nom d'un
+  téléchargement par « download ».
+
 ## Numéro de version
 
-`VERSION` en haut d'`app.js` (affiché dans À propos), à augmenter à chaque
-version publiée. À partir de l'étape h, augmenter aussi `CACHE` dans `sw.js`
-et y inscrire tout nouveau fichier.
+`VERSION` en haut d'`app.js` (affiché dans À propos) ET `CACHE` en haut de
+`sw.js` (`omni-video-vN` → `vN+1`), à augmenter à chaque version publiée qui
+modifie un fichier mis en cache (tout sauf README, CLAUDE.md, CREDITS.md,
+LICENSE et les fichiers de licence). Tout nouveau fichier va dans
+`FICHIERS` de `sw.js`.
 
 ## Tester en local
 

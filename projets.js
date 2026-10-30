@@ -45,8 +45,10 @@ const Projets = {
       return '<li class="carte projet-carte">' +
         '<h3 class="projet-nom">' + proteger(p.nom) + '</h3>' +
         '<p class="projet-resume">' + proteger(morceaux.join(' · ')) + '<br>Modifié ' + proteger(dateEnMots(p.modifie)) + '</p>' +
-        '<div class="rangee-2">' +
+        '<div class="projet-actions">' +
           '<button type="button" class="bouton bouton-principal" data-action="ouvrir-projet" data-id="' + proteger(p.id) + '">Ouvrir</button>' +
+          '<button type="button" class="bouton" data-action="sauvegarder-projet" data-id="' + proteger(p.id) + '">' +
+            '<svg class="icone" aria-hidden="true"><use href="#i-telecharger"/></svg>Sauvegarder</button>' +
           '<button type="button" class="bouton" data-action="supprimer-projet" data-id="' + proteger(p.id) + '">' +
             '<svg class="icone" aria-hidden="true"><use href="#i-poubelle"/></svg>Supprimer</button>' +
         '</div>' +

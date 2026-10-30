@@ -15,7 +15,7 @@ compatibles avec celle d'Omni-Vidéo.
 | **Oxanium** (police des titres) | `oxanium.woff2` | The Oxanium Project Authors | SIL Open Font License 1.1 — [POLICES-OFL.txt](POLICES-OFL.txt) |
 | **Literata** (police du texte) | `literata.woff2` | The Literata Project Authors | SIL Open Font License 1.1 — [POLICES-OFL.txt](POLICES-OFL.txt) |
 | **JetBrains Mono** (police des chiffres) | `jetbrains-mono.woff2` | The JetBrains Mono Project Authors | SIL Open Font License 1.1 — [POLICES-OFL.txt](POLICES-OFL.txt) |
-| **Logo** : le dé à vingt faces de l'Omni-système | `logo.svg` | Ferrus Dantioch | Tous droits réservés, comme les autres logos de l'Omni-système |
+| **Logo** : le dé à vingt faces de l'Omni-système, et les icônes tirées de lui | `logo.svg`, `icon-192.png`, `icon-512.png`, `maskable-512.png`, `apple-touch-icon.png` | Ferrus Dantioch | Tous droits réservés, comme les autres logos de l'Omni-système |
 
 ## Pourquoi ces licences sont compatibles
 

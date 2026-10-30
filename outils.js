@@ -125,10 +125,15 @@ function telechargerFichier(blob, nom) {
   setTimeout(() => URL.revokeObjectURL(adresse), 60000);
 }
 
-/* Un nom de fichier sans caractères interdits : « Mon vlog : jour 1 »
-   → « Mon vlog - jour 1 » */
+/* Un nom de fichier sans caractères interdits ni accents : « Ma vidéo :
+   jour 1 » → « Ma video - jour 1 ». Sans accents, car certains navigateurs
+   remplacent sinon le nom entier par « download ». */
 function nomDeFichier(nom) {
-  const propre = String(nom || '').replace(/[\\/:*?"<>|]+/g, ' - ').replace(/\s+/g, ' ').trim().slice(0, 80);
+  const propre = String(nom || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // é → e, ç → c…
+    .replace(/[œŒæÆ]/g, (l) => ({ 'œ': 'oe', 'Œ': 'OE', 'æ': 'ae', 'Æ': 'AE' })[l])
+    .replace(/[^\x20-\x7e]+/g, '')                        // tout autre signe spécial disparaît
+    .replace(/[\\/:*?"<>|]+/g, ' - ').replace(/\s+/g, ' ').trim().slice(0, 80);
   return propre || 'Omni-Video';
 }
 

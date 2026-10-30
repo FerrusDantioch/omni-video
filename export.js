@@ -219,6 +219,7 @@ const Export = {
     } finally {
       this.enCours = false;
       Veille.permettre();
+      MiseAJour.majBandeau();   // une mise à jour attendait peut-être la fin
       // L'aperçu reprend là où il était
       if (Projets.courant === projet) {
         Lecteur.calculer(projet);

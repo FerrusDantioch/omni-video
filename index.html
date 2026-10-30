@@ -13,6 +13,8 @@
 <meta name="theme-color" content="#14111d">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" href="./logo.svg" type="image/svg+xml">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
 
 <link rel="stylesheet" href="./styles.css">
 
@@ -35,6 +37,7 @@
 <script defer src="./sous-titres.js"></script>
 <script defer src="./fabrication.js"></script>
 <script defer src="./export.js"></script>
+<script defer src="./sauvegarde.js"></script>
 <script defer src="./projets.js"></script>
 <script defer src="./app.js"></script>
 </head>
@@ -101,6 +104,26 @@
   </header>
 
   <div class="pile">
+    <!-- Une nouvelle version est prête (voir MiseAJour dans app.js) -->
+    <div id="bandeau-mise-a-jour" class="bandeau" hidden>
+      <strong>Une nouvelle version d'Omni-Vidéo est prête</strong>
+      <p>Tu choisis le moment. Tes projets restent tels quels.
+         <small>Si tu fermes complètement Omni-Vidéo, la nouvelle version sera là à la prochaine ouverture.</small></p>
+      <div class="rangee-2">
+        <button type="button" class="bouton bouton-principal" data-action="mettre-a-jour">Mettre à jour</button>
+        <button type="button" class="bouton" data-action="plus-tard">Plus tard</button>
+      </div>
+    </div>
+
+    <!-- Installer Omni-Vidéo comme une application (voir Installation dans app.js) -->
+    <div id="bandeau-installer" class="bandeau" hidden>
+      <strong>Installer Omni-Vidéo sur ta tablette</strong>
+      <p>Elle aura son icône sur l'écran d'accueil, s'ouvrira en plein écran et fonctionnera sans Internet.</p>
+      <button type="button" class="bouton bouton-principal large" data-action="installer">
+        <svg class="icone" aria-hidden="true"><use href="#i-telecharger"/></svg>Installer
+      </button>
+    </div>
+
     <!-- Résumé du test de la tablette (rempli par capacites.js) -->
     <div id="bandeau-tablette" class="bandeau" hidden>
       <strong id="bandeau-tablette-titre"></strong>
@@ -117,6 +140,16 @@
     <h2>Mes projets</h2>
     <ul class="liste-projets" id="liste-projets"></ul>
     <p class="vide" id="projets-vide">Tu n'as pas encore de projet. Touche « Nouveau projet » pour commencer ta première vidéo.</p>
+
+    <!-- Sauvegardes de projets (voir sauvegarde.js) -->
+    <div class="bloc-sauvegarde">
+      <p class="aide">« Sauvegarder » met un projet dans un fichier .omnivideo (montage, images, musiques
+         et voix off, mais pas les vidéos) : pour garder une copie, ou pour passer sur une autre tablette.</p>
+      <button type="button" class="bouton large" data-action="importer-projet">
+        <svg class="icone" aria-hidden="true"><use href="#i-dossier"/></svg>Importer une sauvegarde de projet
+      </button>
+      <input type="file" id="choisir-sauvegarde" hidden>
+    </div>
   </div>
 
   <div class="pied">

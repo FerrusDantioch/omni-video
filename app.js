@@ -12,7 +12,7 @@
 
 /* Numéro de version affiché dans « À propos ». À changer à chaque
    nouvelle version publiée. */
-const VERSION = '0.7.0';
+const VERSION = '1.0.0';
 
 /* ---------- 1. Navigation entre les écrans ----------
    Chaque écran est une <section class="vue" data-vue="…">.
@@ -40,7 +40,7 @@ function afficherVue(nom) {
 
   // Remet chaque écran à jour au moment où on l'ouvre
   switch (nom) {
-    case 'accueil':  Projets.afficherListe(); Capacites.afficherBandeau(); break;
+    case 'accueil':  Projets.afficherListe(); Capacites.afficherBandeau(); MiseAJour.majBandeau(); break;
     case 'projet':   Projets.afficherProjet(); break;
     case 'tablette': Capacites.afficher(); break;
   }
@@ -87,6 +87,11 @@ window.addEventListener('popstate', () => {
 const ACTIONS = {
   'nouveau-projet':   () => Projets.creer(),
   'ouvrir-projet':    (b) => Projets.ouvrir(b.dataset.id),
+  'sauvegarder-projet': (b) => Sauvegarde.exporter(b.dataset.id),
+  'importer-projet':  () => Sauvegarde.choisirFichier(),
+  'mettre-a-jour':    (b) => MiseAJour.appliquer(b),
+  'plus-tard':        () => MiseAJour.repousser(),
+  'installer':        () => Installation.installer(),
   'supprimer-projet': (b) => Projets.supprimer(b.dataset.id, b),
   'voir-tablette':    () => allerA('tablette'),
   'voir-apropos':     () => allerA('apropos'),
@@ -234,7 +239,109 @@ document.addEventListener('visibilitychange', () => {
 });
 
 
-/* ---------- 4. Démarrage ---------- */
+/* ---------- 4. Nouvelle version et installation ----------
+   Le fonctionnement hors ligne est assuré par sw.js (le « service
+   worker »). Quand une nouvelle version est publiée, elle se télécharge
+   discrètement, puis ATTEND : un bandeau sur l'accueil propose « Mettre à
+   jour ». Jamais de changement par surprise, et jamais pendant la
+   fabrication d'une vidéo. */
+
+const MiseAJour = {
+  inscription: null,   // l'inscription du service worker
+  demandee: false,     // vrai après un appui sur « Mettre à jour »
+  repoussee: false,    // « Plus tard » : plus rien jusqu'à la prochaine ouverture
+
+  surveiller(inscription) {
+    this.inscription = inscription;
+    // Une version attendait déjà (téléchargée lors d'une visite précédente)
+    this.majBandeau();
+    inscription.addEventListener('updatefound', () => {
+      const nouveau = inscription.installing;
+      if (!nouveau) return;
+      nouveau.addEventListener('statechange', () => {
+        if (nouveau.state === 'installed') this.majBandeau();
+      });
+    });
+    // À chaque retour dans l'application, on regarde s'il y a du nouveau
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && !Export.enCours) inscription.update().catch(() => {});
+    });
+  },
+
+  prete() {
+    // Sans « controller », c'est la toute première installation : rien à proposer
+    return !!(this.inscription && this.inscription.waiting && navigator.serviceWorker.controller);
+  },
+
+  majBandeau() {
+    $('#bandeau-mise-a-jour').hidden = !this.prete() || this.repoussee || Export.enCours;
+  },
+
+  appliquer(bouton) {
+    if (!this.prete() || Export.enCours) return;
+    if (Projets.courant) Projets.enregistrerMaintenant();
+    this.demandee = true;
+    bouton.disabled = true;
+    ecrireTexte(bouton, 'Mise à jour…');
+    this.inscription.waiting.postMessage({ type: 'activer' });
+  },
+
+  repousser() {
+    this.repoussee = true;
+    this.majBandeau();
+    annoncer('D\'accord. Omni-Vidéo te le reproposera à la prochaine ouverture.');
+  }
+};
+
+/* Installer Omni-Vidéo comme une application : Chrome prévient quand
+   c'est possible (« beforeinstallprompt ») ; on montre alors notre propre
+   bouton, plus visible que le menu du navigateur. */
+const Installation = {
+  _demande: null,
+
+  initialiser() {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      this._demande = e;
+      $('#bandeau-installer').hidden = false;
+    });
+    window.addEventListener('appinstalled', () => {
+      this._demande = null;
+      $('#bandeau-installer').hidden = true;
+      Persistance.demander();
+      Message.montrer('Omni-Vidéo est installée ✓ Tu la retrouves sur l\'écran d\'accueil de la tablette.');
+    });
+  },
+
+  async installer() {
+    if (!this._demande) return;
+    const demande = this._demande;
+    this._demande = null;
+    $('#bandeau-installer').hidden = true;
+    try { await demande.prompt(); } catch (e) { /* refusé ou impossible : rien de grave */ }
+  }
+};
+
+/* Le fonctionnement sans Internet est-il prêt ? (écran « Vérifier ma tablette »)
+   Réponses : 'pret', 'premiere-visite', 'incomplet' ou 'impossible'. */
+async function etatHorsLigne() {
+  if (!('serviceWorker' in navigator) || !window.isSecureContext) return 'impossible';
+  const gardien = navigator.serviceWorker.controller;
+  if (!gardien) return 'premiere-visite';
+  try {
+    const reponse = await avecDelai(new Promise((reussir) => {
+      const canal = new MessageChannel();
+      canal.port1.onmessage = (e) => reussir(e.data);
+      gardien.postMessage({ type: 'verifier' }, [canal.port2]);
+    }), 15000);
+    return reponse && reponse.complet ? 'pret' : 'incomplet';
+  } catch (e) {
+    return 'incomplet';
+  }
+}
+
+
+/* ---------- 5. Démarrage ---------- */
 
 async function demarrer() {
   ecrireTexte($('#numero-version'), 'Version ' + VERSION);
@@ -245,6 +352,20 @@ async function demarrer() {
   PistesAudio.initialiser();
   SousTitres.initialiser();
   Export.initialiser();
+  Installation.initialiser();
+
+  // Mode hors ligne : on installe le service worker (fichier sw.js)
+  if ('serviceWorker' in navigator && window.isSecureContext) {
+    // Ce changement a aussi lieu à la toute première installation : on
+    // ne recharge que si la personne a touché « Mettre à jour ».
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (MiseAJour.demandee) location.reload();
+    });
+    navigator.serviceWorker.register('./sw.js').then((i) => MiseAJour.surveiller(i)).catch(() => {
+      /* Pas de mode hors ligne : l'application marche quand même tant
+         qu'elle est ouverte. */
+    });
+  }
   // Les polices sont chargées tout de suite (la toile ne les attend pas)
   Rendu.chargerPolices().then(() => Incrustations.redessiner(true));
 

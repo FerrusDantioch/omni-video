@@ -209,11 +209,19 @@ const Capacites = {
       micro ? 'Tu pourras enregistrer ta voix. La tablette te demandera la permission la première fois.'
             : 'L\'enregistrement de la voix off ne sera pas possible sur ce navigateur.');
 
-    // 10. Fonctionnement hors ligne
-    ajouter('horsligne', 'serviceWorker' in navigator ? 'ok' : 'attention', 'Sans connexion',
-      'serviceWorker' in navigator
-        ? 'Après la première visite, Omni-Vidéo fonctionnera sans Internet.'
-        : 'Ce navigateur ne permet pas d\'utiliser Omni-Vidéo sans Internet.');
+    // 10. Fonctionnement hors ligne (voir sw.js)
+    const horsLigne = await etatHorsLigne();
+    if (horsLigne === 'pret') {
+      ajouter('horsligne', 'ok', 'Sans connexion', 'Omni-Vidéo est rangée dans ta tablette : elle fonctionne sans Internet.');
+    } else if (horsLigne === 'premiere-visite') {
+      ajouter('horsligne', 'info', 'Sans connexion',
+        'Omni-Vidéo se range dans ta tablette pendant cette première visite. À la prochaine ouverture, elle fonctionnera sans Internet.');
+    } else if (horsLigne === 'incomplet') {
+      ajouter('horsligne', 'attention', 'Sans connexion',
+        'Il manque des fichiers pour fonctionner sans Internet. Ouvre Omni-Vidéo une fois avec une connexion pour les récupérer.');
+    } else {
+      ajouter('horsligne', 'attention', 'Sans connexion', 'Ce navigateur ne permet pas d\'utiliser Omni-Vidéo sans Internet.');
+    }
 
     this.resultat = r;
     return r;

@@ -25,6 +25,7 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
 | f. Sous-titres | Saisie à la main, import .srt / .vtt (accents compris), apparence (taille, place, fond, couleur), décalage de tous les sous-titres, enregistrement en .srt ; incrustés dans l'image | ✅ |
 | g. Export MP4 | H.264 + AAC, 16:9 ou 9:16, 720p ou 1080p, 30 images par seconde ; progression, temps restant, arrêt ; écran gardé allumé ; enregistrement dans la tablette ou partage | ✅ |
 | h. Hors ligne | Fonctionne sans Internet après la première visite, installation sur l'écran d'accueil, mise à jour au choix (« Mettre à jour »), sauvegarde et import de projet (fichier .omnivideo) | ✅ |
+| Version 1.1 | Onglet « YouTube » (miniature, chapitres), volume harmonisé, musique qui baisse sous la voix, dupliquer, ralenti / accéléré, photos qui bougent, lumière et couleurs, guide de la première fois, intro et fin réutilisables, reprise d'une longue fabrication interrompue | ✅ |
 
 ### Bon à savoir
 
@@ -76,6 +77,32 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
   fichier .omnivideo avec le montage, les images, les musiques et les voix
   off. Les vidéos n'y sont pas (trop lourdes) : après « Importer une
   sauvegarde de projet », on les redonne avec « Retrouver mes vidéos ».
+- **Onglet « YouTube »** : la **miniature** (une image de la vidéo prise à la
+  ligne violette, avec un titre en gros, enregistrée en JPEG 1280 × 720) et
+  les **chapitres** (des repères posés à la ligne violette ; « Copier pour
+  YouTube » donne le texte à coller dans la description : « 0:00 Intro… »).
+  Omni-Vidéo vérifie les règles de YouTube : premier chapitre à 0:00, au
+  moins 3 chapitres de 10 secondes ou plus.
+- **Volume harmonisé** (case cochée dans « Fabriquer la vidéo ») : Omni-Vidéo
+  écoute d'abord tout le son, puis le règle au niveau conseillé par YouTube
+  (−14 LUFS). Un limiteur empêche le son de « grésiller ». **La musique
+  baisse toute seule** pendant les voix off (case dans l'onglet « Son »).
+- **Outils du clip** (sous la chronologie) : **dupliquer**, **vitesse**
+  (×0,5 à ×2 ; le son suit, plus grave ou plus aigu), **mouvement d'une
+  photo** (zoom avant, zoom arrière, balayage), **lumière, contraste et
+  couleurs** (0 % de couleurs = noir et blanc). Les textes et images
+  incrustés ont aussi « Dupliquer ».
+- **Intro et fin réutilisables** : fabriquez votre intro (logo, titre,
+  petite musique) comme un petit projet à part, puis, dans « Mes fichiers »,
+  « Ajouter mon intro ou ma fin » la place au début ou à la fin de n'importe
+  quelle vidéo.
+- **Les longues vidéos** (plus de 10 minutes) sont fabriquées par morceaux de
+  2 minutes, gardés dans la tablette. Si la fabrication est interrompue
+  (batterie, appel, application fermée, ou « Arrêter »), le bouton devient
+  « Reprendre » : seuls les morceaux manquants sont refaits. Si le montage
+  ou les réglages ont changé entre-temps, tout recommence.
+- **Le guide de la première fois** : cinq bulles à la première ouverture d'un
+  projet. On peut le revoir depuis « À propos ».
 - **Le test de la tablette** (bouton « Vérifier ma tablette ») indique ce qui
   fonctionne : lecture des vidéos, fabrication du MP4, place disponible,
   mémoire, micro…
@@ -140,7 +167,11 @@ pouvoir les envoyer depuis un téléphone ou une tablette.
 | `incrustations.js` | Les onglets du panneau, la liste et l'éditeur des textes et images incrustées, le déplacement au doigt |
 | `audio.js` | La musique de fond et les voix off (lecture avec l'aperçu, enregistrement au micro, onglet « Son ») |
 | `sous-titres.js` | Les sous-titres : lecture des fichiers .srt / .vtt, éditeur, liste, apparence, enregistrement en .srt |
-| `fabrication.js` | La fabrication de la vidéo finale : mélange du son, dessin de chaque image, écriture du MP4 |
+| `fabrication.js` | La fabrication de la vidéo finale : mélange du son, volume harmonisé, dessin de chaque image, écriture du MP4 |
+| `reprise.js` | La fabrication des longues vidéos par morceaux, et leur reprise après une interruption |
+| `youtube.js` | L'onglet « YouTube » : la miniature et les chapitres |
+| `guide.js` | Le guide de la première fois (les bulles) |
+| `intro.js` | Ajouter un autre projet (son intro, sa fin) au début ou à la fin de la vidéo |
 | `disque-prive.js` | Un petit « travailleur » qui écrit la vidéo finale sur la tablette, morceau par morceau (indispensable sur Android pour les vidéos longues) |
 | `export.js` | La fenêtre « Fabriquer la vidéo » : réglages, progression, vidéo prête |
 | `encodeur-aac.js` `encodeur-aac.wasm` | L'encodeur AAC de secours, celui de VisualOn (seulement si la tablette ne sait pas fabriquer le son AAC ; ne pas modifier le .wasm) |

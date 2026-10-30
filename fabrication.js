@@ -384,6 +384,24 @@ class MesureVolume {
   }
 }
 
+/* Écoute tout le son de la vidéo et renvoie le réglage de volume
+   (progres(f) : f de 0 à 1) */
+async function mesurerGain(projet, segments, total, avertissements, verifier, progres) {
+  const mesure = new MesureVolume();
+  const ecoute = new Melangeur(projet, segments, total, avertissements);
+  try {
+    for (let seconde = 0; seconde < total; seconde++) {
+      verifier();
+      const { gauche, droite } = await ecoute.suivante(seconde);
+      mesure.ajouter(gauche, droite);
+      progres(Math.min(total, seconde + 1) / total);
+    }
+  } finally {
+    await ecoute.fermer();
+  }
+  return gainPourVolume(mesure.volume());
+}
+
 /* Le réglage de volume (multiplicateur) pour arriver au niveau conseillé */
 function gainPourVolume(lufs) {
   if (!Number.isFinite(lufs)) return 1;   // vidéo sans son
@@ -621,29 +639,23 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
   }
   verifier();
 
+  // Une longue vidéo se fabrique par morceaux, gardés sur la tablette :
+  // si la fabrication est interrompue, on pourra la reprendre (reprise.js)
+  if (total > SEUIL_PARTIES && lireReglage(CLE_SANS_PARTIES) !== 'oui' && await DisquePrive.peutEcrire()) {
+    return fabriquerParParties(projet, reglages, suivi, arret,
+      { largeur, hauteur, segments, total, nbImages, avertissements, ajustement, verifier });
+  }
+
   // 1 bis. Volume harmonisé : on écoute d'abord tout le son de la vidéo
   //    pour mesurer son volume (rapide : aucune image n'est dessinée)
   const departChrono = performance.now();
   const partMesure = reglages.harmoniser ? PART_MESURE : 0;
-  let gain = 1;
-  if (reglages.harmoniser) {
-    const mesure = new MesureVolume();
-    const ecoute = new Melangeur(projet, segments, total, avertissements);
-    try {
-      for (let seconde = 0; seconde < total; seconde++) {
-        verifier();
-        const { gauche, droite } = await ecoute.suivante(seconde);
-        mesure.ajouter(gauche, droite);
-        suivi({
-          fait: partMesure * Math.min(total, seconde + 1) / total, image: 0, images: nbImages, etape: 'mesure',
-          ecoule: (performance.now() - departChrono) / 1000
-        });
-      }
-    } finally {
-      await ecoute.fermer();
-    }
-    gain = gainPourVolume(mesure.volume());
-  }
+  const gain = reglages.harmoniser
+    ? await mesurerGain(projet, segments, total, avertissements, verifier, (f) => suivi({
+      fait: partMesure * f, image: 0, images: nbImages, etape: 'mesure',
+      ecoule: (performance.now() - departChrono) / 1000
+    }))
+    : 1;
   const limiteur = new Limiteur();
 
   // 2. Où écrire : le disque privé (même une vidéo de 30 minutes), ou la
@@ -778,7 +790,9 @@ async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouverte
       let source = ouvertes.get(i);
       if (!source) {
         if (!Medias.fichiers.has(seg.media.id)) continue;   // vidéo pas encore retrouvée
-        source = new Source(Medias.fichiers.get(seg.media.id), seg.clip.debut);
+        // Lecture à partir d'ici (le début du clip, ou plus loin pour un
+        // morceau de vidéo fabriqué à part : voir reprise.js)
+        source = new Source(Medias.fichiers.get(seg.media.id), Math.max(seg.clip.debut, tFichier));
         await source.ouvrir();
         if (source.fini) avertissements.push('Les images de « ' + seg.media.nom + ' » n\'ont pas pu être lues.');
         ouvertes.set(i, source);

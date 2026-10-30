@@ -43,6 +43,7 @@ const FICHIERS = [
   './audio.js',
   './sous-titres.js',
   './fabrication.js',
+  './reprise.js',
   './disque-prive.js',
   './export.js',
   './sauvegarde.js',

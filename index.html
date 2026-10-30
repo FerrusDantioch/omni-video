@@ -36,6 +36,7 @@
 <script defer src="./audio.js"></script>
 <script defer src="./sous-titres.js"></script>
 <script defer src="./fabrication.js"></script>
+<script defer src="./reprise.js"></script>
 <script defer src="./export.js"></script>
 <script defer src="./sauvegarde.js"></script>
 <script defer src="./youtube.js"></script>
@@ -1061,6 +1062,13 @@
          et ne verrouille pas la tablette (Omni-Vidéo garde l'écran allumé). Pour une longue vidéo,
          branche la tablette sur son chargeur.</p>
       <p class="erreur" id="export-probleme" hidden></p>
+      <!-- Une longue fabrication interrompue (voir reprise.js) -->
+      <div class="bloc-dernier" id="export-reprise" hidden>
+        <p id="export-reprise-texte"></p>
+        <button type="button" class="bouton large" data-action="export-recommencer">
+          <svg class="icone" aria-hidden="true"><use href="#i-recul"/></svg><span>Tout recommencer depuis le début</span>
+        </button>
+      </div>
       <div class="bloc-dernier" id="export-dernier" hidden>
         <p id="export-dernier-texte"></p>
         <button type="button" class="bouton large" data-action="export-retrouver">
@@ -1070,7 +1078,7 @@
       <div class="rangee-2">
         <button type="submit" class="bouton" value="fermer">Annuler</button>
         <button type="button" class="bouton bouton-principal" data-action="export-lancer" id="export-lancer">
-          <svg class="icone" aria-hidden="true"><use href="#i-film"/></svg>Fabriquer
+          <svg class="icone" aria-hidden="true"><use href="#i-film"/></svg><span>Fabriquer</span>
         </button>
       </div>
     </div>

@@ -215,6 +215,7 @@ const ACTIONS = {
   'export-arreter':    (b) => Export.arreter(b),
   'export-enregistrer': () => Export.enregistrer(),
   'export-partager':   () => Export.partager(),
+  'export-recommencer': (b) => Export.recommencer(b),
   'export-liberer':    (b) => Export.liberer(b),
   'export-retrouver':  () => Export.retrouver(),
   'export-reglages':   () => Export.ouvrir()

@@ -165,6 +165,21 @@ const Export = {
       ? 'Temps de fabrication : ' + tempsArrondi(vitesse * duree) + ' (d\'après ta dernière vidéo).'
       : 'Le temps restant s\'affichera pendant la fabrication.';
     ecrireTexte($('#export-estimation'), texte);
+    // Une fabrication de cette vidéo interrompue ? (avec CES réglages)
+    const reprise = Reprise.pour(projet, { qualite, harmoniser: $('#export-harmoniser').checked });
+    const autreReprise = !reprise && Reprise.pour(projet);
+    $('#export-reprise').hidden = !reprise && !autreReprise;
+    if (reprise) {
+      ecrireTexte($('#export-reprise-texte'), 'La fabrication de cette vidéo a été interrompue (' +
+        Math.floor(Reprise.avancement(reprise) * 100) + ' % déjà faits). Touche « Fabriquer » : elle reprendra là où elle s\'était arrêtée.');
+      ecrireTexte($('#export-lancer span'), 'Reprendre');
+    } else {
+      if (autreReprise) {
+        ecrireTexte($('#export-reprise-texte'), 'Une fabrication interrompue existe, mais le montage ou les réglages ont changé depuis : ' +
+          'la vidéo sera fabriquée depuis le début.');
+      }
+      ecrireTexte($('#export-lancer span'), 'Fabriquer');
+    }
     const probleme = await this._probleme(qualite);
     ecrireTexte($('#export-probleme'), probleme);
     $('#export-probleme').hidden = !probleme;
@@ -212,7 +227,7 @@ const Export = {
     try {
       const resultat = await fabriquerVideo(projet, { qualite, harmoniser }, (e) => this._suivi(e), this._arret);
       const secondes = (performance.now() - depart) / 1000;
-      if (duree >= 20) ecrireReglage(CLE_VITESSE + qualite, String(secondes / duree));
+      if (duree >= 20 && !resultat.repris) ecrireReglage(CLE_VITESSE + qualite, String(secondes / duree));
       this._fichier = resultat.fichier;
       this._nom = nomDeFichier(projet.nom) + '.mp4';
       this._montrerTermine(duree, qualite, resultat.avertissements, secondes);
@@ -221,7 +236,9 @@ const Export = {
       if (erreur && erreur.name === 'Annulation') {
         this._etape('reglages');
         this.majReglages();
-        Message.montrer('Fabrication arrêtée. Rien n\'a été gardé.');
+        Message.montrer(Reprise.pour(projet)
+          ? 'Fabrication arrêtée. Ce qui est déjà fait est gardé : touche « Reprendre » quand tu veux.'
+          : 'Fabrication arrêtée. Rien n\'a été gardé.');
       } else {
         console.error(erreur);
         this._montrerErreur(erreur);
@@ -246,6 +263,8 @@ const Export = {
     $('#export-barre').setAttribute('aria-valuenow', String(pourcent));
     let detail = 'Préparation…';
     if (e.etape === 'mesure') detail = 'Mesure du volume du son…';
+    if (e.etape === 'son') detail = 'Fabrication du son…';
+    if (e.etape === 'assemblage') detail = 'Assemblage des morceaux…';
     if (e.etape === 'images') detail = 'Image ' + nombreEnTexte(e.image) + ' sur ' + nombreEnTexte(e.images);
     if (e.etape === 'finition') detail = 'Finition du fichier…';
     if (this._arret && this._arret.demande) detail = 'Arrêt en cours…';
@@ -254,7 +273,9 @@ const Export = {
     if (e.ecoule) {
       temps = 'Temps écoulé : ' + dureeEnMots(e.ecoule);
       // Le temps restant n'est fiable qu'après quelques secondes
-      if (e.fait > 0.01 && e.ecoule > 8) temps += ' · reste ' + tempsArrondi(e.ecoule * (1 - e.fait) / e.fait);
+      // (après une reprise, seul ce qui est fait depuis compte pour la vitesse)
+      const fait = e.fait - (e.depuis || 0);
+      if (fait > 0.01 && e.ecoule > 8) temps += ' · reste ' + tempsArrondi(e.ecoule * (1 - e.fait) / fait);
     }
     ecrireTexte($('#export-temps'), temps);
   },
@@ -329,6 +350,15 @@ const Export = {
 
   /* ---------- 4. Un souci ---------- */
 
+  /* « Tout recommencer depuis le début » : les morceaux déjà faits sont effacés */
+  recommencer(bouton) {
+    armerBouton(bouton, 'Effacer ce qui est fait ?', async () => {
+      await Reprise.effacer();
+      Message.montrer('C\'est effacé : la prochaine fabrication repartira du début.');
+      this.majReglages();
+    });
+  },
+
   _montrerErreur(erreur) {
     const nom = erreur && erreur.name;
     let texte;
@@ -341,6 +371,9 @@ const Export = {
       texte = 'Le son de la vidéo n\'a pas pu être fabriqué. Mets Google Chrome à jour, puis réessaie.';
     } else if (nom === 'TropLongEnMemoire') {
       texte = 'Sur cette tablette, Omni-Vidéo ne peut fabriquer que des vidéos courtes. Essaie la qualité 720p.';
+    } else if (nom === 'MorceauxIncompatibles') {
+      texte = 'Les morceaux de la vidéo n\'ont pas pu être assemblés sur cette tablette. Touche « Réessayer » : ' +
+        'la vidéo sera fabriquée d\'un seul coup cette fois.';
     } else if (nom === 'NotReadableError' || nom === 'NotFoundError') {
       texte = 'Une de tes vidéos n\'a pas pu être relue (elle a peut-être été déplacée ou effacée). ' +
         'Ferme le projet, rouvre-le et retrouve tes vidéos, puis réessaie.';

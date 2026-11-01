@@ -285,6 +285,17 @@ modifie un fichier mis en cache (tout sauf README, CLAUDE.md, CREDITS.md,
 LICENSE et les fichiers de licence). Tout nouveau fichier va dans
 `FICHIERS` de `sw.js`.
 
+## Tests
+
+`node tests/tester.js` (Playwright + Chromium, 20 vérifications ; pour le
+Chromium installé ailleurs : `CHROMIUM_PATH=…`). `tests/outils.js` = boîte à
+outils commune (même fichier dans plusieurs applications) : serveur local à
+la forme d'adresse de GitHub Pages (port libre), contrôles communs (fichiers
+du service worker présents, téléphone sans débordement, `[hidden]` respecté,
+hors ligne, aucun autre site contacté, aucune erreur JavaScript). Le dossier
+`tests/` ne sert qu'au développement : il n'est pas dans le cache et ne
+demande pas de nouvelle version.
+
 ## Tester en local
 
 WebCodecs et le service worker ne fonctionnent que sur `https://` ou

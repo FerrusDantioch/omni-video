@@ -234,6 +234,15 @@ README), dans le groupe « Création de contenu ».
 - Positions des éléments (textes, images…) : en fractions de l'image (0 à 1),
   pour qu'un changement de format 16:9 ↔ 9:16 reste correct.
 
+## Champ `id` du manifeste : nom du dossier, jamais `./`
+
+`manifest.json` contient `"id": "/omni-video/"` (corrigé en novembre 2026 ; il
+valait `"./"`). Chrome lit `id` par rapport à la **racine du domaine**
+(`https://ferrusdantioch.github.io/`) : `"./"` donnait la même identité que
+toutes les applications qui l'utilisaient. Ne plus changer cette valeur :
+une application installée dont l'`id` change devient une autre application
+(il faut la désinstaller puis la réinstaller ; les données restent).
+
 ## Même adresse de site que les autres applications
 
 Toutes les applications sont servies depuis `ferrusdantioch.github.io` : elles
@@ -275,6 +284,20 @@ Pas de `skipWaiting()` automatique : une mise à jour attend un appui sur
 modifie un fichier mis en cache (tout sauf README, CLAUDE.md, CREDITS.md,
 LICENSE et les fichiers de licence). Tout nouveau fichier va dans
 `FICHIERS` de `sw.js`.
+
+## Tests
+
+`node tests/tester.js` (Playwright + Chromium, 20 vérifications ; pour le
+Chromium installé ailleurs : `CHROMIUM_PATH=…`). `tests/outils.js` = boîte à
+outils commune (même fichier dans plusieurs applications) : serveur local à
+la forme d'adresse de GitHub Pages (port libre), contrôles communs (fichiers
+du service worker présents, téléphone sans débordement, `[hidden]` respecté,
+hors ligne, aucun autre site contacté, aucune erreur JavaScript). Le dossier
+`tests/` ne sert qu'au développement : il n'est pas dans le cache et ne
+demande pas de nouvelle version. `tests/exemple.mp4` (3 s, mire + « la »
+440 Hz, fabriqué par ffmpeg) sert à l'import ; la vidéo fabriquée est
+analysée par `ffprobe` s'il est installé (H.264 16:9, AAC, 3 s — l'AAC passe
+par `encodeur-aac.js` dans le Chromium de test).
 
 ## Tester en local
 

@@ -2,7 +2,7 @@
   "name": "Omni-Vidéo — montage vidéo pour YouTube",
   "short_name": "Omni-Vidéo",
   "description": "Le montage vidéo tout simple pour YouTube, sur tablette : couper, assembler, textes, musique, voix off, sous-titres, puis fichier MP4. Gratuit, fonctionne hors ligne.",
-  "id": "./",
+  "id": "/omni-video/",
   "lang": "fr",
   "dir": "ltr",
   "start_url": "./index.html",

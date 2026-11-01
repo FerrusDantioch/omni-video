@@ -234,6 +234,15 @@ README), dans le groupe « Création de contenu ».
 - Positions des éléments (textes, images…) : en fractions de l'image (0 à 1),
   pour qu'un changement de format 16:9 ↔ 9:16 reste correct.
 
+## Champ `id` du manifeste : nom du dossier, jamais `./`
+
+`manifest.json` contient `"id": "/omni-video/"` (corrigé en novembre 2026 ; il
+valait `"./"`). Chrome lit `id` par rapport à la **racine du domaine**
+(`https://ferrusdantioch.github.io/`) : `"./"` donnait la même identité que
+toutes les applications qui l'utilisaient. Ne plus changer cette valeur :
+une application installée dont l'`id` change devient une autre application
+(il faut la désinstaller puis la réinstaller ; les données restent).
+
 ## Même adresse de site que les autres applications
 
 Toutes les applications sont servies depuis `ferrusdantioch.github.io` : elles

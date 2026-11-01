@@ -294,7 +294,10 @@ la forme d'adresse de GitHub Pages (port libre), contrôles communs (fichiers
 du service worker présents, téléphone sans débordement, `[hidden]` respecté,
 hors ligne, aucun autre site contacté, aucune erreur JavaScript). Le dossier
 `tests/` ne sert qu'au développement : il n'est pas dans le cache et ne
-demande pas de nouvelle version.
+demande pas de nouvelle version. `tests/exemple.mp4` (3 s, mire + « la »
+440 Hz, fabriqué par ffmpeg) sert à l'import ; la vidéo fabriquée est
+analysée par `ffprobe` s'il est installé (H.264 16:9, AAC, 3 s — l'AAC passe
+par `encodeur-aac.js` dans le Chromium de test).
 
 ## Tester en local
 

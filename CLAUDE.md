@@ -227,6 +227,28 @@ README), dans le groupe « Création de contenu ».
     `#export-batterie-faible`. SignalFin : vibration + deux notes
     (oscillateurs), `AudioContext` créé au toucher de « Fabriquer » (sinon
     le navigateur refuse le son), case `omnivideo-signal-fin`.
+- Version 1.3 (fabrication plus rapide) :
+  - `choisirEncodeur()` (fabrication.js) : `isConfigSupported` avec
+    `hardwareAcceleration: 'prefer-hardware'` pour High (`avc1.6400xx`), puis
+    Main (`4d00`), puis Baseline (`42e0`) ; trouvé → `fullCodecString` +
+    `prefer-hardware` (`reglagesImages()`), sinon réglages ordinaires de
+    Mediabunny. Un échec pendant que la puce travaille (`noterEchecMateriel`)
+    → `omnivideo-sans-materiel` = 'oui' et nouvel essai AUTOMATIQUE par le
+    processeur (vidéo courte : `fabriquerVideo` se relance ; par morceaux :
+    morceaux effacés, `etat.encodeur` = processeur). « Vérifier ma tablette »
+    affiche ce choix (ligne `materiel`).
+  - `etat.encodeur` (omnivideo-reprise) : tous les morceaux d'une vidéo sont
+    compressés de la même façon, sinon ils ne se recollent pas.
+  - Deux morceaux à la fois (reprise.js) : `omnivideo-ensemble-720p/1080p`
+    = 'deux' | 'un' | absent. Absent = essai : un morceau seul chronométré,
+    puis deux ensemble (`Promise.allSettled`) ; 'deux' seulement si chaque
+    image coûte < 85 % (`GAIN_MIN_ENSEMBLE`). Après chaque paire,
+    `partiesCompatibles()` compare les réglages de décodage (sinon morceaux
+    effacés et 'un'). Erreur à deux → morceau refait seul ; 'un' n'est
+    retenu que si ce morceau seul passe (`aConfirmer`). Mesuré sur
+    l'ordinateur de test (processeur seul, 4 cœurs) : 47 s contre 50 s par
+    morceau, donc 'un' choisi ; le vrai gain se voit sur une tablette à
+    puce vidéo.
 - ⚠️ `rendu.js` dessine les calques pour l'aperçu ET pour l'export : ne jamais
   dessiner un calque autrement à l'export, sinon l'aperçu mentirait.
 - ⚠️ `nettoyerProjet()` et `nettoyerMedia()` ne gardent **que** les champs

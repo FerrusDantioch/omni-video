@@ -41,6 +41,60 @@ function poidsEstime(duree, qualite) {
   return Math.round(duree * (DEBITS_VIDEO[qualite] + DEBIT_SON) / 8 * 1.03);
 }
 
+/* ---------- La puce vidéo de la tablette ----------
+   Compresser les images est le plus long travail de la fabrication. La
+   « puce vidéo » de la tablette le fait bien plus vite que le processeur,
+   mais certaines ne connaissent pas le réglage « High » (celui choisi
+   d'office) : on essaie donc aussi « Main » et « Baseline », un peu moins
+   efficaces mais tout à fait bons pour YouTube. Si aucun ne passe par la
+   puce, on garde les réglages ordinaires (le processeur).
+   Renvoie { materiel: vrai/faux, codec, profil } (codec absent = ordinaire).
+   Si la puce a déjà fait échouer une fabrication, on ne l'essaie plus. */
+const CLE_SANS_MATERIEL = 'omnivideo-sans-materiel';
+const PROFILS_H264 = [{ profil: 'High', code: '6400' }, { profil: 'Main', code: '4d00' }, { profil: 'Baseline', code: '42e0' }];
+const _encodeurs = new Map();
+
+function choisirEncodeur(largeur, hauteur, debit) {
+  const cle = largeur + 'x' + hauteur + '-' + debit;
+  if (lireReglage(CLE_SANS_MATERIEL) === 'oui') return Promise.resolve({ materiel: false });
+  if (!_encodeurs.has(cle)) {
+    _encodeurs.set(cle, (async () => {
+      if (typeof VideoEncoder !== 'function') return { materiel: false };
+      // Le « niveau » H.264 : 3.1 jusqu'au 720p, 4.0 au-delà (comme Mediabunny)
+      const niveau = largeur * hauteur > 1280 * 720 ? '28' : '1f';
+      for (const { profil, code } of PROFILS_H264) {
+        const codec = 'avc1.' + code + niveau;
+        const ok = await soutenu(() => VideoEncoder.isConfigSupported({
+          codec, width: largeur, height: hauteur, bitrate: debit, framerate: IMAGES_PAR_SECONDE,
+          hardwareAcceleration: 'prefer-hardware', avc: { format: 'avc' }
+        }));
+        if (ok) return { materiel: true, codec, profil };
+      }
+      return { materiel: false };
+    })());
+  }
+  return _encodeurs.get(cle);
+}
+
+/* Les réglages de compression des images pour Mediabunny */
+function reglagesImages(qualite, encodeur) {
+  const reglages = { codec: 'avc', bitrate: DEBITS_VIDEO[qualite], keyFrameInterval: 2 };
+  if (encodeur && encodeur.materiel) {
+    reglages.fullCodecString = encodeur.codec;
+    reglages.hardwareAcceleration = 'prefer-hardware';
+  }
+  return reglages;
+}
+
+/* Une fabrication a échoué alors que la puce vidéo travaillait : la
+   prochaine fois, on passera par le processeur (réglages ordinaires). */
+function noterEchecMateriel(erreur, encodeur) {
+  if (!encodeur || !encodeur.materiel || !erreur) return;
+  if (['Annulation', 'TropLongEnMemoire', 'QuotaExceededError', 'MorceauxIncompatibles'].includes(erreur.name)) return;
+  ecrireReglage(CLE_SANS_MATERIEL, 'oui');
+  _encodeurs.clear();
+}
+
 /* L'erreur levée quand on touche « Arrêter » : ce n'est pas un vrai souci */
 class Annulation extends Error {
   constructor() { super('Fabrication arrêtée'); this.name = 'Annulation'; }
@@ -645,6 +699,8 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
     return fabriquerParParties(projet, reglages, suivi, arret,
       { largeur, hauteur, segments, total, nbImages, avertissements, ajustement, verifier });
   }
+  // La puce vidéo, si elle sait compresser ces images (bien plus rapide)
+  const encodeur = await choisirEncodeur(largeur, hauteur, DEBITS_VIDEO[reglages.qualite]);
 
   // 1 bis. Volume harmonisé : on écoute d'abord tout le son de la vidéo
   //    pour mesurer son volume (rapide : aucune image n'est dessinée)
@@ -684,11 +740,7 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
     format: new Mediabunny.Mp4OutputFormat({ fastStart: flux ? false : 'in-memory' }),
     target: cible
   });
-  const sourceImages = new Mediabunny.CanvasSource(toile, {
-    codec: 'avc',
-    bitrate: DEBITS_VIDEO[reglages.qualite],
-    keyFrameInterval: 2
-  });
+  const sourceImages = new Mediabunny.CanvasSource(toile, reglagesImages(reglages.qualite, encodeur));
   const sourceSon = new Mediabunny.AudioSampleSource({ codec: 'aac', bitrate: DEBIT_SON });
   sortie.addVideoTrack(sourceImages, { frameRate: IMAGES_PAR_SECONDE });
   sortie.addAudioTrack(sourceSon);
@@ -750,6 +802,12 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
     if (sortie.state !== 'finalized' && sortie.state !== 'canceled') await sortie.cancel().catch(() => {});
     if (flux) await flux.abort().catch(() => {});
     if (poignee) await DisquePrive.effacer();
+    if (encodeur.materiel && erreur && erreur.name !== 'Annulation') {
+      // La puce vidéo a refusé : on recommence tout de suite par le
+      // processeur (si le souci venait d'ailleurs, il reviendra et s'affichera)
+      noterEchecMateriel(erreur, encodeur);
+      if (lireReglage(CLE_SANS_MATERIEL) === 'oui') return fabriquerVideo(projet, reglages, suivi, arret);
+    }
     throw erreur;
   }
 

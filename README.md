@@ -27,6 +27,7 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
 | h. Hors ligne | Fonctionne sans Internet après la première visite, installation sur l'écran d'accueil, mise à jour au choix (« Mettre à jour »), sauvegarde et import de projet (fichier .omnivideo) | ✅ |
 | Version 1.1 | Onglet « YouTube » (miniature, chapitres), volume harmonisé, musique qui baisse sous la voix, dupliquer, ralenti / accéléré, photos qui bougent, lumière et couleurs, guide de la première fois, intro et fin réutilisables, reprise d'une longue fabrication interrompue | ✅ |
 | Version 1.2 | Enlever les blancs d'un clip, rappel de sauvegarde, place utilisée et ménage, conseils et pause selon la batterie, signal de fin de fabrication | ✅ |
+| Version 1.3 | Fabrication plus rapide : la puce vidéo est utilisée dès qu'elle le peut, et les longues vidéos peuvent être fabriquées deux morceaux à la fois | ✅ |
 
 ### Bon à savoir
 
@@ -114,6 +115,15 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
   (batterie, appel, application fermée, ou « Arrêter »), le bouton devient
   « Reprendre » : seuls les morceaux manquants sont refaits. Si le montage
   ou les réglages ont changé entre-temps, tout recommence.
+- **Fabrication plus rapide (version 1.3)** : Omni-Vidéo confie la
+  compression des images à la puce vidéo de la tablette dès qu'elle en est
+  capable (réglage « High », sinon « Main » ou « Baseline », que certaines
+  puces sont seules à connaître). Si la puce refuse, Omni-Vidéo repasse tout
+  seul par le processeur, sans message d'erreur. Pour les longues vidéos, la
+  première fabrication fait un essai, chronomètre en main : un morceau seul,
+  puis deux morceaux en même temps. La tablette garde ensuite la façon la
+  plus rapide. « Vérifier ma tablette », ligne « Accélération de la vidéo »,
+  indique ce qui a été choisi.
 - **Batterie** : si la tablette n'est pas branchée avant une longue
   fabrication, Omni-Vidéo conseille de la brancher. Si la batterie tombe
   sous 15 % pendant la fabrication d'une longue vidéo, elle se met en pause
@@ -147,6 +157,8 @@ une musique de fond répétée, fondus au début et à la fin.
 | 30 min | 720p | 15 min 9 s | 1,1 Go | 1,3 Go, stable |
 | 1 h | 1080p | 33 min 13 s | 3,4 Go | 1,4 Go, stable |
 | 10 min 5 s, coupée à 41 % puis reprise | 720p | 3 min 12 s après la reprise | 366 Mo | — |
+| 12 min 24 s, version 1.2 (un morceau à la fois) | 720p | 5 min 30 s | 475 Mo | — |
+| 12 min 24 s, version 1.3, deux morceaux à la fois | 720p | 5 min 10 s | 475 Mo | — |
 
 Ce que montrent ces essais :
 
@@ -168,6 +180,11 @@ Ce que montrent ces essais :
   c'est souvent plus rapide que ci-dessus ; sans elle, plus lent. Omni-Vidéo
   retient la vitesse de la dernière fabrication et annonce ensuite le temps
   avant de commencer.
+- **Deux morceaux à la fois** : sur l'ordinateur de test, le gain est faible,
+  car le processeur y fait déjà tout et travaille à fond. Sur une tablette, la
+  puce vidéo travaille à côté du processeur : le gain peut y être bien plus
+  grand. L'essai automatique ne garde cette façon que si elle fait gagner au
+  moins 15 % de temps.
 
 ## Les fichiers
 

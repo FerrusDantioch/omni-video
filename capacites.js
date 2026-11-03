@@ -106,8 +106,9 @@ const Capacites = {
       // 4c. Fabriquer la vidéo finale en H.264 (ce que demande YouTube)
       const encode720 = await soutenu(() => VideoEncoder.isConfigSupported(configEncodage(1280, 720, 5000000)));
       const encode1080 = await soutenu(() => VideoEncoder.isConfigSupported(configEncodage(1920, 1080, 8000000)));
-      const materiel = await soutenu(() => VideoEncoder.isConfigSupported(
-        Object.assign(configEncodage(1280, 720, 5000000), { hardwareAcceleration: 'prefer-hardware' })));
+      // La puce vidéo : réglage « High », sinon « Main » ou « Baseline » (fabrication.js)
+      const puce = await choisirEncodeur(1280, 720, 5000000);
+      const materiel = puce.materiel;
       if (encode1080) {
         ajouter('encodage', 'ok', 'Fabrication de la vidéo finale',
           'Ta tablette sait fabriquer le fichier MP4 pour YouTube, en 720p et en 1080p.');
@@ -124,10 +125,18 @@ const Capacites = {
           'créer le fichier final. Mettre Google Chrome à jour peut régler le souci.');
       }
       if (encode720 || encode1080) {
+        // Les longues vidéos : deux morceaux à la fois ? (reprise.js, appris
+        // pendant la première longue fabrication)
+        const ensemble = ['720p', '1080p'].map((q) => lireReglage(CLE_ENSEMBLE + q));
+        const deux = ensemble.includes('deux')
+          ? ' Les longues vidéos sont fabriquées deux morceaux à la fois.'
+          : ensemble.includes('un') ? ' Les longues vidéos sont fabriquées un morceau à la fois (le plus rapide sur ta tablette).' : '';
         ajouter('materiel', materiel ? 'ok' : 'info', 'Accélération de la vidéo',
-          materiel
-            ? 'La puce vidéo de la tablette aide à fabriquer la vidéo : c\'est plus rapide.'
-            : 'La vidéo sera fabriquée par le processeur seul : ça marche, mais c\'est plus lent.');
+          (materiel
+            ? 'La puce vidéo de la tablette aide à fabriquer la vidéo : c\'est plus rapide (réglage « ' + puce.profil + ' »).'
+            : lireReglage(CLE_SANS_MATERIEL) === 'oui'
+              ? 'La vidéo est fabriquée par le processeur seul : la puce vidéo avait fait échouer une fabrication.'
+              : 'La vidéo sera fabriquée par le processeur seul : ça marche, mais c\'est plus lent.') + deux);
       }
 
       // 4d. Le son : lire (AAC, MP3) et fabriquer (AAC, demandé par YouTube)

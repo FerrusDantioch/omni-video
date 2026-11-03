@@ -15,6 +15,10 @@
       aucune image n'est dessinée) ;
    2. les IMAGES, par morceaux de 2 minutes : omnivideo-partie-0.mp4, -1…
       (chaque morceau terminé est noté : il ne sera jamais refait) ;
+      Quand la tablette en est capable, DEUX morceaux sont fabriqués en
+      même temps (deux lectures, deux compressions) : la première longue
+      vidéo fait l'essai (un morceau seul, puis deux à la fois, chrono en
+      main) et la tablette garde la façon la plus rapide ;
    3. l'ASSEMBLAGE : les morceaux et le son sont recopiés, sans rien
       recompresser, dans le fichier final (omnivideo-export.mp4). Chaque
       morceau est effacé dès qu'il est recopié (la place reste petite).
@@ -32,6 +36,10 @@ const CLE_SANS_PARTIES = 'omnivideo-sans-parties';   // 'oui' si l'assemblage a 
 const NOM_FICHIER_SON = 'omnivideo-son.mp4';
 const PART_SON = 0.06;              // parts de la barre de progression
 const PART_ASSEMBLAGE = 0.04;
+// Deux morceaux d'images à la fois ? 'deux', 'un', ou rien (pas encore
+// essayé sur cette tablette). Un réglage par qualité (720p, 1080p).
+const CLE_ENSEMBLE = 'omnivideo-ensemble-';
+const GAIN_MIN_ENSEMBLE = 0.85;     // à deux, chaque image doit coûter au moins 15 % de temps en moins
 
 function nomPartie(k) {
   return 'omnivideo-partie-' + k + '.mp4';
@@ -104,8 +112,18 @@ async function fabriquerParParties(projet, reglages, suivi, arret, prep) {
     etat = {
       empreinte, projetId: projet.id, nom: projet.nom, qualite: reglages.qualite, harmoniser: !!reglages.harmoniser,
       date: Date.now(), gain: 1, gainPret: !reglages.harmoniser, son: false,
-      faites: new Array(nbParties).fill(false), avertissements: []
+      faites: new Array(nbParties).fill(false), avertissements: [],
+      encodeur: await choisirEncodeur(largeur, hauteur, DEBITS_VIDEO[reglages.qualite])
     };
+    Reprise.ecrire(etat);
+  }
+  // Tous les morceaux doivent être compressés de la même façon (sinon ils
+  // ne se recollent pas). Si la puce vidéo a fait échouer la fabrication,
+  // les morceaux qu'elle a faits sont refaits par le processeur.
+  if (!etat.encodeur) etat.encodeur = { materiel: false };
+  if (etat.encodeur.materiel && lireReglage(CLE_SANS_MATERIEL) === 'oui') {
+    await effacerParties(etat);
+    etat.encodeur = { materiel: false };
     Reprise.ecrire(etat);
   }
   const repris = Reprise.avancement(etat) > 0;
@@ -140,16 +158,95 @@ async function fabriquerParParties(projet, reglages, suivi, arret, prep) {
     noter();
   }
 
-  // 3. Les images, morceau par morceau
-  const imagesFaites = () => etat.faites.reduce((n, fait, k) =>
-    n + (fait ? Math.min(nbImages, Math.round((k + 1) * DUREE_PARTIE * IMAGES_PAR_SECONDE)) - Math.round(k * DUREE_PARTIE * IMAGES_PAR_SECONDE) : 0), 0);
-  for (let k = 0; k < nbParties; k++) {
-    if (etat.faites[k]) continue;
-    const avant = imagesFaites();
-    await fabriquerPartie(projet, segments, total, k, largeur, hauteur, reglages.qualite, ajustement, avertissements, verifier,
-      (n) => signaler(partMesure + PART_SON + partImages * (avant + n) / nbImages, 'images', avant + n));
+  // 3. Les images, morceau par morceau (deux à la fois si la tablette va
+  //    ainsi plus vite)
+  const imagesDe = (k) => Math.min(nbImages, Math.round((k + 1) * DUREE_PARTIE * IMAGES_PAR_SECONDE)) -
+    Math.round(k * DUREE_PARTIE * IMAGES_PAR_SECONDE);
+  const imagesFaites = () => etat.faites.reduce((n, fait, k) => n + (fait ? imagesDe(k) : 0), 0);
+  const enCours = new Map();   // n° de morceau → images déjà faites
+  const montrer = () => {
+    let n = imagesFaites();
+    for (const v of enCours.values()) n += v;
+    signaler(partMesure + PART_SON + partImages * n / nbImages, 'images', n);
+  };
+  const faire = async (k, seul) => {
+    enCours.set(k, 0);
+    try {
+      await fabriquerPartie(projet, segments, total, k, largeur, hauteur, reglages.qualite, etat.encodeur, ajustement,
+        avertissements, verifier, (n) => { enCours.set(k, n); montrer(); });
+    } catch (erreur) {
+      // (à deux, l'échec peut venir du nombre de lecteurs : on ne conclut rien)
+      if (seul && etat.encodeur.materiel && erreur && erreur.name !== 'Annulation') {
+        // La puce vidéo a refusé : tout est refait par le processeur, tout
+        // de suite (si le souci venait d'ailleurs, il reviendra et s'affichera)
+        noterEchecMateriel(erreur, etat.encodeur);
+        await effacerParties(etat);
+        etat.encodeur = { materiel: false };
+        noter();
+        return false;
+      }
+      throw erreur;
+    } finally {
+      enCours.delete(k);
+    }
     etat.faites[k] = true;
     noter();
+    return true;
+  };
+  const cleEnsemble = CLE_ENSEMBLE + reglages.qualite;
+  let ensemble = lireReglage(cleEnsemble);   // 'deux', 'un' ou rien (à essayer)
+  let tempsSeul = null;                      // secondes par image, un morceau seul (pendant l'essai)
+  let aConfirmer = false;                    // un échec à deux, à vérifier en refaisant le morceau seul
+  for (;;) {
+    const reste = [];
+    for (let k = 0; k < nbParties; k++) if (!etat.faites[k]) reste.push(k);
+    if (!reste.length) break;
+    const aDeux = reste.length >= 2 && (ensemble === 'deux' || (!ensemble && tempsSeul !== null));
+    if (!aDeux) {
+      const debut = performance.now();
+      if (!(await faire(reste[0], true))) {
+        // Passage au processeur : on oublie ce qu'on croyait savoir
+        ensemble = lireReglage(cleEnsemble);
+        tempsSeul = null;
+        aConfirmer = false;
+        continue;
+      }
+      if (aConfirmer) {
+        // Seul, le morceau est passé : c'est bien « à deux » qui coinçait
+        ecrireReglage(cleEnsemble, 'un');
+        aConfirmer = false;
+      }
+      if (!ensemble && tempsSeul === null) tempsSeul = (performance.now() - debut) / 1000 / imagesDe(reste[0]);
+      continue;
+    }
+    // Deux morceaux en même temps
+    const lot = reste.slice(0, 2);
+    const debut = performance.now();
+    const resultats = await Promise.allSettled(lot.map((k) => faire(k, false)));
+    const reussis = lot.filter((k, i) => resultats[i].status === 'fulfilled');
+    const erreurs = resultats.filter((r) => r.status === 'rejected').map((r) => r.reason);
+    // Deux compressions en même temps doivent donner des morceaux qui se
+    // recollent aux autres : sinon, un seul à la fois désormais
+    const compatibles = !reussis.length || await partiesCompatibles(etat, reussis);
+    const arret = erreurs.find((e) => e && e.name === 'Annulation');
+    if (!compatibles) {
+      ensemble = 'un';
+      ecrireReglage(cleEnsemble, ensemble);
+    } else if (erreurs.length && !arret) {
+      // Une erreur à deux : peut-être trop pour la tablette, qui n'a que
+      // quelques lecteurs et compresseurs. Le morceau raté est refait seul ;
+      // s'il passe, la tablette fera désormais un morceau à la fois.
+      ensemble = 'un';
+      aConfirmer = true;
+    }
+    if (arret) throw arret;
+    if (ensemble === 'un') continue;
+    if (!ensemble) {
+      // Fin de l'essai : deux à la fois est-il vraiment plus rapide ?
+      const tempsDeux = (performance.now() - debut) / 1000 / (imagesDe(lot[0]) + imagesDe(lot[1]));
+      ensemble = tempsDeux < tempsSeul * GAIN_MIN_ENSEMBLE ? 'deux' : 'un';
+      ecrireReglage(cleEnsemble, ensemble);
+    }
   }
 
   // 4. L'assemblage du fichier final
@@ -201,7 +298,7 @@ async function fabriquerSonSeul(projet, segments, total, gain, avertissements, v
 
 /* Les images du morceau n° k (de k × 2 min à (k + 1) × 2 min), sans son.
    Dans ce fichier, le temps repart de 0 : l'assemblage le recalera. */
-async function fabriquerPartie(projet, segments, total, k, largeur, hauteur, qualite, ajustement, avertissements, verifier, progres) {
+async function fabriquerPartie(projet, segments, total, k, largeur, hauteur, qualite, encodeur, ajustement, avertissements, verifier, progres) {
   const premiere = Math.round(k * DUREE_PARTIE * IMAGES_PAR_SECONDE);
   const derniere = Math.min(Math.ceil(total * IMAGES_PAR_SECONDE - 1e-6), Math.round((k + 1) * DUREE_PARTIE * IMAGES_PAR_SECONDE));
   const t0 = premiere / IMAGES_PAR_SECONDE;
@@ -214,11 +311,7 @@ async function fabriquerPartie(projet, segments, total, k, largeur, hauteur, qua
     format: new Mediabunny.Mp4OutputFormat({ fastStart: false }),
     target: new Mediabunny.StreamTarget(ouvert.flux, { chunked: true, chunkSize: 8 * 1024 * 1024 })
   });
-  const sourceImages = new Mediabunny.CanvasSource(toile, {
-    codec: 'avc',
-    bitrate: DEBITS_VIDEO[qualite],
-    keyFrameInterval: 2
-  });
+  const sourceImages = new Mediabunny.CanvasSource(toile, reglagesImages(qualite, encodeur));
   sortie.addVideoTrack(sourceImages, { frameRate: IMAGES_PAR_SECONDE });
   const ouvertes = new Map();
   const fermer = async () => {
@@ -255,6 +348,45 @@ function memesReglagesVideo(a, b) {
   const x = octets(a.description);
   const y = octets(b.description);
   return x.length === y.length && x.every((v, i) => v === y[i]);
+}
+
+/* Les réglages de décodage du morceau n° k (déjà fabriqué) */
+async function reglagesPartie(k) {
+  const dossier = await DisquePrive.dossier();
+  const fichier = await (await dossier.getFileHandle(nomPartie(k))).getFile();
+  const entree = new Mediabunny.Input({ source: new Mediabunny.BlobSource(fichier), formats: Mediabunny.ALL_FORMATS });
+  try {
+    return await (await entree.getPrimaryVideoTrack()).getDecoderConfig();
+  } finally {
+    entree.dispose();
+  }
+}
+
+/* Les morceaux du « lot » (fabriqués en même temps) se recollent-ils aux
+   autres ? Sinon, ceux qui ne vont pas sont effacés (ils seront refaits). */
+async function partiesCompatibles(etat, lot) {
+  const autre = etat.faites.findIndex((fait, k) => fait && !lot.includes(k));
+  const reference = await reglagesPartie(autre >= 0 ? autre : lot[0]);
+  // (lot : les morceaux réussis, déjà notés comme faits)
+  let ok = true;
+  for (const k of lot) {
+    if (memesReglagesVideo(await reglagesPartie(k), reference)) continue;
+    ok = false;
+    etat.faites[k] = false;
+    const dossier = await DisquePrive.dossier();
+    await dossier.removeEntry(nomPartie(k)).catch(() => {});
+  }
+  Reprise.ecrire(etat);
+  return ok;
+}
+
+/* Efface les morceaux d'images déjà faits (ils seront refaits) */
+async function effacerParties(etat) {
+  const dossier = await DisquePrive.dossier();
+  for (let k = 0; k < etat.faites.length; k++) {
+    if (dossier) await dossier.removeEntry(nomPartie(k)).catch(() => {});
+    etat.faites[k] = false;
+  }
 }
 
 /* Recopie le son et les morceaux d'images dans le fichier final, sans

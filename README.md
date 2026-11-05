@@ -329,9 +329,9 @@ jusqu'à 10 minutes) et rouvrez l'application.
 
 ## Conception
 
-Application développée par **Ferrus Dantioch**, avec l'aide de **Claude**, une
-intelligence artificielle développée par Anthropic. Ferrus Dantioch, créateur
-de l'Omni-système, en a imaginé l'idée, les fonctions et l'apparence ; Claude
+Application développée par **Ferrus Dantioch**, avec l'aide de
+l'**intelligence artificielle**. Ferrus Dantioch, créateur de l'Omni-système,
+en a imaginé l'idée, les fonctions et l'apparence ; l'intelligence artificielle
 en a écrit le code. (C'est aussi indiqué dans la page « À propos » de
 l'application.) L'application elle-même n'utilise aucune intelligence
 artificielle.

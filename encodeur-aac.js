@@ -59,7 +59,9 @@ class EncodeurAacDeSecours extends Mediabunny.CustomAudioEncoder {
 
   _recommencer() {
     this.attente = new Float32Array(ECHANTILLONS_PAR_TRAME_AAC * this.canaux * 4);
+    this._debutAttente = 0;      // position de lecture dans « attente » (en nombres, pas en échantillons)
     this.nbAttente = 0;          // échantillons (par canal) en attente d'une trame complète
+    this._tamponCopie = null;    // tampon réutilisé pour lire les échantillons entrants
     this.depart = null;          // le moment du premier échantillon, en échantillons
     this.trame = 0;
     this.infos = {
@@ -70,18 +72,36 @@ class EncodeurAacDeSecours extends Mediabunny.CustomAudioEncoder {
   encode(morceau) {
     if (this.depart === null) this.depart = Math.round(morceau.timestamp * this.frequence);
     // Les échantillons du morceau, canaux entrelacés (gauche, droite, gauche…)
-    const octets = new Uint8Array(morceau.allocationSize({ format: 'f32', planeIndex: 0 }));
-    morceau.copyTo(octets, { format: 'f32', planeIndex: 0 });
-    const donnees = new Float32Array(octets.buffer);
-    const besoin = this.nbAttente * this.canaux + donnees.length;
-    if (besoin > this.attente.length) {
-      const plusGrand = new Float32Array(besoin * 2);
-      plusGrand.set(this.attente.subarray(0, this.nbAttente * this.canaux));
-      this.attente = plusGrand;
+    const octetsRequis = morceau.allocationSize({ format: 'f32', planeIndex: 0 });
+    if (!this._tamponCopie || this._tamponCopie.byteLength < octetsRequis) {
+      this._tamponCopie = new Uint8Array(octetsRequis);
     }
-    this.attente.set(donnees, this.nbAttente * this.canaux);
+    const vueOctets = this._tamponCopie.subarray(0, octetsRequis);
+    morceau.copyTo(vueOctets, { format: 'f32', planeIndex: 0 });
+    const donnees = new Float32Array(this._tamponCopie.buffer, 0, octetsRequis / 4);
+    const finActuelle = this._debutAttente + this.nbAttente * this.canaux;
+    const besoin = this.nbAttente * this.canaux + donnees.length;
+    if (finActuelle + donnees.length > this.attente.length) {
+      if (besoin <= this.attente.length && this._debutAttente > 0) {
+        // On ramène les quelques échantillons restants au début du tableau
+        this.attente.copyWithin(0, this._debutAttente, finActuelle);
+        this._debutAttente = 0;
+      } else {
+        const plusGrand = new Float32Array(besoin * 2);
+        plusGrand.set(this.attente.subarray(this._debutAttente, finActuelle));
+        this.attente = plusGrand;
+        this._debutAttente = 0;
+      }
+    }
+    this.attente.set(donnees, this._debutAttente + this.nbAttente * this.canaux);
     this.nbAttente += donnees.length / this.canaux;
     while (this.nbAttente >= ECHANTILLONS_PAR_TRAME_AAC) this._encoderTrame();
+    // Un seul petit décalage à la fin (moins d'une trame restante) au lieu d'un par trame
+    if (this._debutAttente > 0) {
+      const reste = this.nbAttente * this.canaux;
+      if (reste > 0) this.attente.copyWithin(0, this._debutAttente, this._debutAttente + reste);
+      this._debutAttente = 0;
+    }
   }
 
   flush() {
@@ -90,7 +110,13 @@ class EncodeurAacDeSecours extends Mediabunny.CustomAudioEncoder {
     if (this.depart !== null) {
       const fin = Math.ceil(this.nbAttente / ECHANTILLONS_PAR_TRAME_AAC) + 2;
       for (let i = 0; i < fin; i++) {
-        this.attente.fill(0, this.nbAttente * this.canaux, ECHANTILLONS_PAR_TRAME_AAC * this.canaux);
+        const base = this._debutAttente;
+        const n = ECHANTILLONS_PAR_TRAME_AAC * this.canaux;
+        if (base + n > this.attente.length) {
+          this.attente.copyWithin(0, base, base + this.nbAttente * this.canaux);
+          this._debutAttente = 0;
+        }
+        this.attente.fill(0, this._debutAttente + this.nbAttente * this.canaux, this._debutAttente + n);
         this.nbAttente = ECHANTILLONS_PAR_TRAME_AAC;
         this._encoderTrame();
       }
@@ -100,18 +126,21 @@ class EncodeurAacDeSecours extends Mediabunny.CustomAudioEncoder {
 
   close() {
     this.wasm = null;   // la mémoire de l'encodeur est rendue avec lui
+    this._tamponCopie = null;
   }
 
   _encoderTrame() {
     const n = ECHANTILLONS_PAR_TRAME_AAC * this.canaux;
+    const base = this._debutAttente;
     // Nombres à virgule (-1 à 1) → entiers sur 16 bits, dans la mémoire de l'encodeur
     const entree = new Int16Array(this.wasm.memory.buffer, this.wasm.va_entree(), n);
+    const attente = this.attente;
     for (let i = 0; i < n; i++) {
-      const v = this.attente[i];
+      const v = attente[base + i];
       entree[i] = v >= 1 ? 32767 : v <= -1 ? -32768 : Math.round(v * 32767);
     }
+    this._debutAttente += n;
     this.nbAttente -= ECHANTILLONS_PAR_TRAME_AAC;
-    this.attente.copyWithin(0, n, n + this.nbAttente * this.canaux);
 
     const taille = this.wasm.va_encoder();
     if (taille < 0) throw new Error('L\'encodeur AAC de secours a rencontré un souci');

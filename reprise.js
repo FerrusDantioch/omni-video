@@ -143,19 +143,25 @@ async function fabriquerParParties(projet, reglages, suivi, arret, prep) {
     ecoule: (performance.now() - depart) / 1000
   });
 
-  // 1. Le volume harmonisé (une seule fois)
-  if (!etat.gainPret) {
-    etat.gain = await mesurerGain(projet, segments, total, avertissements, verifier, (f) => signaler(partMesure * f, 'mesure'));
-    etat.gainPret = true;
-    noter();
-  }
-
-  // 2. Le son de toute la vidéo
-  if (!etat.son) {
-    await fabriquerSonSeul(projet, segments, total, etat.gain, avertissements, verifier,
-      (f) => signaler(partMesure + PART_SON * f, 'son'));
-    etat.son = true;
-    noter();
+  // 1 et 2. Le volume harmonisé puis le son de toute la vidéo (un seul cache d'entrées pour les deux)
+  if (!etat.gainPret || !etat.son) {
+    const cacheSon = new CacheEntrees();
+    try {
+      if (!etat.gainPret) {
+        etat.gain = await mesurerGain(projet, segments, total, avertissements, verifier,
+          (f) => signaler(partMesure * f, 'mesure'), cacheSon);
+        etat.gainPret = true;
+        noter();
+      }
+      if (!etat.son) {
+        await fabriquerSonSeul(projet, segments, total, etat.gain, avertissements, verifier,
+          (f) => signaler(partMesure + PART_SON * f, 'son'), cacheSon);
+        etat.son = true;
+        noter();
+      }
+    } finally {
+      cacheSon.fermer();
+    }
   }
 
   // 3. Les images, morceau par morceau (deux à la fois si la tablette va
@@ -251,13 +257,14 @@ async function fabriquerParParties(projet, reglages, suivi, arret, prep) {
 
   // 4. L'assemblage du fichier final
   signaler(1 - PART_ASSEMBLAGE, 'assemblage', nbImages);
-  const fichier = await assemblerParties(projet, nbParties, (f) => signaler(1 - PART_ASSEMBLAGE + PART_ASSEMBLAGE * f, 'assemblage', nbImages), etat);
+  const fichier = await assemblerParties(projet, nbParties,
+    (f) => signaler(1 - PART_ASSEMBLAGE + PART_ASSEMBLAGE * f, 'assemblage', nbImages), etat, verifier);
   await Reprise.effacer();
   return { fichier, avertissements, repris };
 }
 
 /* Le son de toute la vidéo, seul, dans omnivideo-son.mp4 */
-async function fabriquerSonSeul(projet, segments, total, gain, avertissements, verifier, progres) {
+async function fabriquerSonSeul(projet, segments, total, gain, avertissements, verifier, progres, cacheEntrees) {
   const ouvert = await DisquePrive.ouvrirFichier(NOM_FICHIER_SON);
   if (!ouvert) throw new Error('Disque privé indisponible');
   const sortie = new Mediabunny.Output({
@@ -266,17 +273,14 @@ async function fabriquerSonSeul(projet, segments, total, gain, avertissements, v
   });
   const sourceSon = new Mediabunny.AudioSampleSource({ codec: 'aac', bitrate: DEBIT_SON });
   sortie.addAudioTrack(sourceSon);
-  const melange = new Melangeur(projet, segments, total, avertissements);
+  const melange = new Melangeur(projet, segments, total, avertissements, cacheEntrees);
   const limiteur = new Limiteur();
   try {
     await sortie.start();
     for (let seconde = 0; seconde < total; seconde++) {
       verifier();
-      const { gauche, droite, t, n } = await melange.suivante(seconde);
+      const { donnees, gauche, droite, t } = await melange.suivante(seconde);
       limiteur.appliquer(gauche, droite, gain);
-      const donnees = new Float32Array(2 * n);
-      donnees.set(gauche, 0);
-      donnees.set(droite, n);
       const morceau = new Mediabunny.AudioSample({
         data: donnees, format: 'f32-planar', numberOfChannels: 2, sampleRate: FREQUENCE_SON, timestamp: t
       });
@@ -302,6 +306,7 @@ async function fabriquerPartie(projet, segments, total, k, largeur, hauteur, qua
   const premiere = Math.round(k * DUREE_PARTIE * IMAGES_PAR_SECONDE);
   const derniere = Math.min(Math.ceil(total * IMAGES_PAR_SECONDE - 1e-6), Math.round((k + 1) * DUREE_PARTIE * IMAGES_PAR_SECONDE));
   const t0 = premiere / IMAGES_PAR_SECONDE;
+  const tFin = derniere / IMAGES_PAR_SECONDE;
   const nom = nomPartie(k);
   const ouvert = await DisquePrive.ouvrirFichier(nom);
   if (!ouvert) throw new Error('Disque privé indisponible');
@@ -314,16 +319,23 @@ async function fabriquerPartie(projet, segments, total, k, largeur, hauteur, qua
   const sourceImages = new Mediabunny.CanvasSource(toile, reglagesImages(qualite, encodeur));
   sortie.addVideoTrack(sourceImages, { frameRate: IMAGES_PAR_SECONDE });
   const ouvertes = new Map();
+  const cacheEntrees = new CacheEntrees();
+  const cachePhotos = new Map();
+  const mediasParId = new Map(projet.medias.map((m) => [m.id, m]));
+  const optionsDessin = { cacheEntrees, cachePhotos, mediasParId, finExport: tFin, curseur: { i: 0 } };
   const fermer = async () => {
     for (const s of ouvertes.values()) await s.fermer();
     ouvertes.clear();
+    cacheEntrees.fermer();
+    cachePhotos.forEach((c) => { c.width = 0; c.height = 0; });
+    cachePhotos.clear();
   };
   try {
     await sortie.start();
     for (let image = premiere; image < derniere; image++) {
       verifier();
       const t = image / IMAGES_PAR_SECONDE;
-      await dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouvertes, ajustement, avertissements);
+      await dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouvertes, ajustement, avertissements, optionsDessin);
       await sourceImages.add(t - t0, 1 / IMAGES_PAR_SECONDE);
       if ((image - premiere) % IMAGES_PAR_SECONDE === IMAGES_PAR_SECONDE - 1) progres(image - premiere + 1);
     }
@@ -391,7 +403,7 @@ async function effacerParties(etat) {
 
 /* Recopie le son et les morceaux d'images dans le fichier final, sans
    rien recompresser. Chaque morceau est effacé dès qu'il est recopié. */
-async function assemblerParties(projet, nbParties, progres, etat) {
+async function assemblerParties(projet, nbParties, progres, etat, verifier) {
   const dossier = await DisquePrive.dossier();
   const lire = async (nom) => (await dossier.getFileHandle(nom)).getFile();
   const entreeSon = new Mediabunny.Input({ source: new Mediabunny.BlobSource(await lire(NOM_FICHIER_SON)), formats: Mediabunny.ALL_FORMATS });
@@ -426,6 +438,7 @@ async function assemblerParties(projet, nbParties, progres, etat) {
   try {
     await sortie.start();
     for (let k = 0; k < nbParties; k++) {
+      if (verifier) verifier();
       const entree = new Mediabunny.Input({ source: new Mediabunny.BlobSource(await lire(nomPartie(k))), formats: Mediabunny.ALL_FORMATS });
       try {
         const piste = await entree.getPrimaryVideoTrack();
@@ -440,6 +453,7 @@ async function assemblerParties(projet, nbParties, progres, etat) {
         const decalage = Math.round(k * DUREE_PARTIE * IMAGES_PAR_SECONDE) / IMAGES_PAR_SECONDE;
         let debutMorceau = premier;
         for await (const paquet of new Mediabunny.EncodedPacketSink(piste).packets()) {
+          if (verifier) verifier();
           const t = paquet.timestamp + decalage;
           await sonJusqua(t);
           await images.add(paquet.clone({ timestamp: t }), debutMorceau ? { decoderConfig: reglages } : undefined);

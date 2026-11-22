@@ -229,7 +229,7 @@ const Chapitres = {
     chapitre.titre = titre.slice(0, 100);
     Projets.modifie();
     this.majVerification();
-    Chronologie.dessiner();
+    Chronologie.dessinerRegle();
   },
 
   aller(id) {

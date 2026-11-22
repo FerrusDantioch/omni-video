@@ -88,9 +88,15 @@ const Lecteur = {
      pas fini (pendant une transition qui chevauche, c'est celui qui
      s'en va). Le dernier si t est tout au bout, -1 si le montage est vide. */
   indexA(t) {
-    if (!this.segments.length) return -1;
-    const i = this.segments.findIndex((s) => t < s.fin - 1e-6);
-    return i === -1 ? this.segments.length - 1 : i;
+    const n = this.segments.length;
+    if (!n) return -1;
+    let a = 0, b = n;
+    while (a < b) {
+      const m = (a + b) >> 1;
+      if (this.segments[m].fin - 1e-6 <= t) a = m + 1;
+      else b = m;
+    }
+    return a < n ? a : n - 1;
   },
 
   segmentCourant() {
@@ -287,26 +293,34 @@ const Lecteur = {
         }
       }
     }
-    for (const el of this.videos.concat(this.images)) {
+    const elements = this._elements || (this._elements = this.videos.concat(this.images));
+    for (let k = 0; k < elements.length; k++) {
+      const el = elements[k];
+      const prec = el._styleA || (el._styleA = {});
       const v = visibles.get(el);
       if (!v) {
-        el.style.opacity = '0';
-        el.style.transform = '';
-        if (el.tagName === 'VIDEO') el.muted = true;
+        if (prec.op !== '0') { el.style.opacity = '0'; prec.op = '0'; }
+        if (prec.tr !== '') { el.style.transform = ''; prec.tr = ''; }
+        if (el.tagName === 'VIDEO' && !el.muted) el.muted = true;
         continue;
       }
-      el.style.opacity = String(v.etat.opacite);
+      const op = String(v.etat.opacite);
+      if (prec.op !== op) { el.style.opacity = op; prec.op = op; }
       // Glissement (transition), zoom lent d'une photo, lumière et couleurs
       const mvt = Montage.mouvement(v.seg, this.t);
       const dx = v.etat.decalage + mvt.dx;
-      el.style.transform = (dx ? 'translateX(' + (dx * 100).toFixed(2) + '%) ' : '') +
+      const tr = (dx ? 'translateX(' + (dx * 100).toFixed(2) + '%) ' : '') +
         (mvt.echelle !== 1 ? 'scale(' + mvt.echelle.toFixed(4) + ')' : '');
+      if (prec.tr !== tr) { el.style.transform = tr; prec.tr = tr; }
       const filtre = Montage.filtre(v.seg.clip);
-      if (el.style.filter !== filtre) el.style.filter = filtre;
-      el.style.zIndex = v.etat.dessus ? '2' : '1';
+      if (prec.fl !== filtre) { el.style.filter = filtre; prec.fl = filtre; }
+      const z = v.etat.dessus ? '2' : '1';
+      if (prec.z !== z) { el.style.zIndex = z; prec.z = z; }
       if (el.tagName === 'VIDEO') {
-        el.volume = borner(v.seg.clip.volume * v.etat.son, 0, 1);
-        el.muted = this.muet || v.seg.clip.volume === 0;
+        const vol = borner(v.seg.clip.volume * v.etat.son, 0, 1);
+        if (Math.abs(el.volume - vol) > 0.001) el.volume = vol;
+        const muet = this.muet || v.seg.clip.volume === 0;
+        if (el.muted !== muet) el.muted = muet;
       }
     }
   },
@@ -376,8 +390,8 @@ const Lecteur = {
 
   afficherVide() {
     this.index = -1;
-    this.videos.forEach((el) => { el.pause(); el.style.opacity = '0'; });
-    this.images.forEach((el) => { el.style.opacity = '0'; });
+    this.videos.forEach((el) => { el.pause(); el.style.opacity = '0'; el._styleA = { op: '0' }; });
+    this.images.forEach((el) => { el.style.opacity = '0'; el._styleA = { op: '0' }; });
     this.message('i-video', 'Ta vidéo est vide pour l\'instant. Ajoute une vidéo avec « Ajouter des vidéos », ' +
       'ou touche « Ajouter à la vidéo » sur un de tes fichiers.');
   },

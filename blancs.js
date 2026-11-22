@@ -88,31 +88,53 @@ const Blancs = {
     try {
       const piste = await entree.getPrimaryAudioTrack();
       if (!piste || !(await piste.canDecode())) return null;
-      const sink = new Mediabunny.AudioBufferSink(piste);
+      const sink = new Mediabunny.AudioSampleSink(piste);
       const n = Math.max(1, Math.ceil((fin - debut) / TRANCHE_BLANCS));
       const somme = new Float64Array(n);
       const compte = new Uint32Array(n);
+      let g = new Float32Array(0);
+      let d = new Float32Array(0);
       let dernierAffichage = 0;
-      for await (const morceau of sink.buffers(debut, fin)) {
-        if (this._arret) return null;
-        const tampon = morceau.buffer;
-        const g = tampon.getChannelData(0);
-        const d = tampon.numberOfChannels > 1 ? tampon.getChannelData(1) : null;
-        const depart = (morceau.timestamp - debut) / TRANCHE_BLANCS;   // n° de tranche (à virgule) du 1er échantillon
-        const pas = 1 / (tampon.sampleRate * TRANCHE_BLANCS);
-        for (let k = 0; k < g.length; k++) {
-          const w = Math.floor(depart + k * pas);
-          if (w < 0) continue;
-          if (w >= n) break;
-          const v = d ? (g[k] + d[k]) / 2 : g[k];
-          somme[w] += v * v;
-          compte[w]++;
-        }
-        // Le compteur n'est mis à jour que 4 fois par seconde au plus
-        const maintenant = performance.now();
-        if (maintenant - dernierAffichage > 250) {
-          dernierAffichage = maintenant;
-          progres(borner((morceau.timestamp + morceau.duration - debut) / (fin - debut), 0, 1));
+      for await (const morceau of sink.samples(debut, fin)) {
+        try {
+          if (this._arret) return null;
+          const nb = morceau.numberOfFrames;
+          const stereo = morceau.numberOfChannels > 1;
+          if (g.length < nb) g = new Float32Array(nb);
+          morceau.copyTo(g.subarray(0, nb), { planeIndex: 0, format: 'f32-planar' });
+          if (stereo) {
+            if (d.length < nb) d = new Float32Array(nb);
+            morceau.copyTo(d.subarray(0, nb), { planeIndex: 1, format: 'f32-planar' });
+          }
+          const depart = (morceau.timestamp - debut) / TRANCHE_BLANCS;   // n° de tranche (à virgule) du 1er échantillon
+          const pas = 1 / (morceau.sampleRate * TRANCHE_BLANCS);
+          if (stereo) {
+            for (let k = 0; k < nb; k++) {
+              const w = Math.floor(depart + k * pas);
+              if (w < 0) continue;
+              if (w >= n) break;
+              const v = (g[k] + d[k]) * 0.5;
+              somme[w] += v * v;
+              compte[w]++;
+            }
+          } else {
+            for (let k = 0; k < nb; k++) {
+              const w = Math.floor(depart + k * pas);
+              if (w < 0) continue;
+              if (w >= n) break;
+              const v = g[k];
+              somme[w] += v * v;
+              compte[w]++;
+            }
+          }
+          // Le compteur n'est mis à jour que 4 fois par seconde au plus
+          const maintenant = performance.now();
+          if (maintenant - dernierAffichage > 250) {
+            dernierAffichage = maintenant;
+            progres(borner((morceau.timestamp + morceau.duration - debut) / (fin - debut), 0, 1));
+          }
+        } finally {
+          morceau.close();
         }
       }
       // Volume de chaque tranche en décibels (une tranche sans son = silence complet)

@@ -249,6 +249,32 @@ README), dans le groupe « Création de contenu ».
     l'ordinateur de test (processeur seul, 4 cœurs) : 47 s contre 50 s par
     morceau, donc 'un' choisi ; le vrai gain se voit sur une tablette à
     puce vidéo.
+- Version 1.4 (optimisations de performances et correctifs) :
+  - `Rendu._cacheTextes` (`rendu.js`) : cache LRU (24 entrées max) de petites
+    toiles pré-dessinées pour textes et sous-titres (évite `measureText` et
+    `shadowBlur` à 30 ips ; vidé à la fin de `chargerPolices()` et dans
+    `oublierImages()`). Recherche binaire dans `sousTitresActifs()`.
+  - `CacheEntrees` + `finCourseVideo()` (`fabrication.js`, `reprise.js`) :
+    un seul `Mediabunny.Input` par média pendant l'export, borne de fin passée
+    à `VideoSampleSink.samples(debut, fin)`, et réutilisation du décodeur
+    `SourceImages` (et `SourceSon`) entre clips consécutifs d'un même fichier
+    (coupes, « Enlever les blancs »). `fillRect` noir sauté quand un clip
+    opaque couvre tout le cadre ; cache `photoRedimensionnee` (4 entrées max).
+  - Audio (`fabrication.js`, `encodeur-aac.js`, `blancs.js`) : migration de
+    `AudioBufferSink` vers `AudioSampleSink` (zéro allocation d'`AudioBuffer`),
+    tampon réutilisé dans `Melangeur`, chemin rapide 48 kHz ×1 dans `SourceSon`,
+    filtres BS.1770 dépliés dans `MesureVolume`, pointeur de lecture `O(N)`
+    dans `encodeur-aac.js`, transfert zéro-copie des blocs complets vers
+    `disque-prive.js`.
+  - Interface 60 ips (`lecteur.js`, `chronologie.js`, `incrustations.js`,
+    `sous-titres.js`, `youtube.js`) : suppression du layout thrashing dans
+    `Incrustations.redessiner()`, cache DOM dans `Chronologie.majPosition()`
+    et `Lecteur._composer()`, recherche binaire `indexA()`, mises à jour
+    ciblées `majUnSousTitre()` et `dessinerRegle()`.
+  - Démarrage et mémoire (`capacites.js`, `medias.js`, `projets.js`) : tests
+    de `Capacites.tester()` et `Medias.chargerFichiersLegers()` parallélisés,
+    libération des fichiers légers à la fermeture (`oublierFichiersLegers`),
+    durée exacte (`Montage.segments`) sur les cartes de l'accueil.
 - ⚠️ `rendu.js` dessine les calques pour l'aperçu ET pour l'export : ne jamais
   dessiner un calque autrement à l'export, sinon l'aperçu mentirait.
 - ⚠️ `nettoyerProjet()` et `nettoyerMedia()` ne gardent **que** les champs

@@ -59,6 +59,7 @@ const Incrustations = {
   _cle: '',              // ce qui est dessiné en ce moment (pour ne pas redessiner pour rien)
   _glisse: null,         // déplacement au doigt en cours
   _dejaMemorise: false,  // une seule étape « Annuler » par séance de modification
+  _tailleCadre: { l: 0, h: 0 },
 
   initialiser() {
     // Les choix de l'éditeur, fabriqués une fois pour toutes
@@ -83,13 +84,28 @@ const Incrustations = {
 
     // L'aperçu : toucher un calque, le faire glisser
     const toile = $('#montage-calques');
+    this._toile = toile;
+    this._ctx = toile.getContext('2d');
+    this._cadre = $('#cadre-apercu');
     toile.addEventListener('pointerdown', (e) => this._doigtPose(e));
     toile.addEventListener('pointermove', (e) => this._doigtBouge(e));
     toile.addEventListener('pointerup', (e) => this._doigtLeve(e));
     toile.addEventListener('pointercancel', (e) => this._doigtLeve(e));
 
     Lecteur.surChangement(() => this.redessiner());
-    new ResizeObserver(() => this.redessiner(true)).observe($('#cadre-apercu'));
+    new ResizeObserver(() => {
+      this._mesurerCadre();
+      this.redessiner(true);
+    }).observe(this._cadre);
+  },
+
+  _mesurerCadre() {
+    const cadre = this._cadre || $('#cadre-apercu');
+    const echelle = Math.min(window.devicePixelRatio || 1, 2);
+    this._tailleCadre = {
+      l: Math.round(cadre.clientWidth * echelle),
+      h: Math.round(cadre.clientHeight * echelle)
+    };
   },
 
   calque(id) {
@@ -100,15 +116,14 @@ const Incrustations = {
   /* ---------- Dessiner les calques dans l'aperçu ---------- */
   redessiner(force) {
     const projet = Projets.courant;
-    const toile = $('#montage-calques');
-    const ctx = toile.getContext('2d');
+    const toile = this._toile || $('#montage-calques');
+    const ctx = this._ctx || toile.getContext('2d');
     if (!projet) { ctx.clearRect(0, 0, toile.width, toile.height); return; }
 
-    // La toile a la taille réelle de l'écran (net sur un écran très fin)
-    const cadre = $('#cadre-apercu');
-    const echelle = Math.min(window.devicePixelRatio || 1, 2);
-    const l = Math.round(cadre.clientWidth * echelle);
-    const h = Math.round(cadre.clientHeight * echelle);
+    // La toile a la taille réelle de l'écran (mesurée au redimensionnement,
+    // pas à chaque image pendant la lecture : évite de ralentir la tablette)
+    if (force || !this._tailleCadre.l || !this._tailleCadre.h) this._mesurerCadre();
+    const { l, h } = this._tailleCadre;
     if (toile.width !== l || toile.height !== h) { toile.width = l; toile.height = h; force = true; }
 
     // Rien n'a changé depuis le dernier dessin ? On ne refait rien.
@@ -403,7 +418,7 @@ const Incrustations = {
     const textes = projet.calques.filter((c) => c.type === 'texte').sort(parDebut);
     $('#liste-textes').innerHTML = textes.map((c) =>
       '<li class="carte-calque">' +
-        '<p class="calque-apercu" style="font-family:' + (POLICES[c.police].famille).replace(/"/g, '&quot;') + '">' + proteger(c.texte.trim() || '(texte vide)') + '</p>' +
+        '<p class="calque-apercu" style="font-family:' + (POLICES[c.police] || POLICES.oxanium).famille.replace(/"/g, '&quot;') + '">' + proteger(c.texte.trim() || '(texte vide)') + '</p>' +
         '<p class="aide">' + moment(c) + '</p>' +
         '<button type="button" class="bouton" data-action="editer-calque" data-id="' + proteger(c.id) + '">' +
           '<svg class="icone" aria-hidden="true"><use href="#i-crayon"/></svg>Modifier</button>' +

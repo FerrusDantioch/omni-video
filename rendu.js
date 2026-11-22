@@ -51,11 +51,16 @@ const MARGE_CALQUE = 0.04;        // un calque ne sort jamais du cadre (4 % de m
 const TAILLE_SOUS_TITRES = { petite: 4, normale: 5, grande: 6.5 };
 const Y_SOUS_TITRES = { bas: 1, releve: 0.74, haut: 0 };
 const MARGE_SOUS_TITRES = 0.07;
+const CACHE_TEXTES_MAX = 24;   // nombre de textes/sous-titres déjà dessinés gardés en mémoire
 
 const Rendu = {
   /* Images incrustées déjà prêtes à dessiner (numéro du média → image) */
   _images: new Map(),
   _enChargement: new Set(),
+  /* Textes et sous-titres déjà dessinés sur une petite toile : évite de
+     recalculer les lignes et les ombres 30 fois par seconde pour un texte
+     qui ne change pas. */
+  _cacheTextes: new Map(),
 
   /* Les polices de l'application ne sont chargées par le navigateur que
      lorsqu'une page les utilise. La toile, elle, ne les attend pas : on
@@ -67,6 +72,8 @@ const Rendu = {
       ['400', '700'].forEach((graisse) => demandes.push(document.fonts.load(graisse + ' 32px "' + nom + '"')));
     });
     await Promise.all(demandes).catch(() => {});
+    // Une police vient peut-être d'arriver : on redessinera les textes en cache avec la bonne police
+    this._viderCacheTextes();
   },
 
   /* L'image d'un média, prête à dessiner. Si elle n'est pas encore
@@ -103,15 +110,35 @@ const Rendu = {
     }));
   },
 
-  /* Libère la mémoire des images (projet fermé) */
+  /* Libère une seule image en mémoire (quand on retire un fichier du projet) */
+  oublierImage(id) {
+    const img = this._images.get(id);
+    if (img && img.close) img.close();
+    this._images.delete(id);
+  },
+
+  /* Vide le cache des textes déjà dessinés (libère les petites toiles) */
+  _viderCacheTextes() {
+    this._cacheTextes.forEach((e) => { e.toile.width = 0; e.toile.height = 0; });
+    this._cacheTextes.clear();
+  },
+
+  /* Libère la mémoire des images et des textes en cache (projet fermé) */
   oublierImages() {
     this._images.forEach((img) => { if (img.close) img.close(); });
     this._images.clear();
+    this._viderCacheTextes();
   },
 
   /* Les calques visibles à l'instant t */
   actifs(projet, t) {
-    return projet.calques.filter((c) => t >= c.debut && t < c.debut + c.duree);
+    if (!projet.calques.length) return [];
+    const resultat = [];
+    for (let i = 0; i < projet.calques.length; i++) {
+      const c = projet.calques[i];
+      if (t >= c.debut && t < c.debut + c.duree) resultat.push(c);
+    }
+    return resultat;
   },
 
   /* Opacité d'un calque à l'instant t (fondu au début et à la fin) */
@@ -125,31 +152,38 @@ const Rendu = {
      ctx : la toile ; largeur / hauteur : sa taille en pixels.
      options.selection : numéro d'un calque à entourer (aperçu seulement).
      options.quandPret : à appeler quand une image devient prête.
+     options.mediasParId : table rapide numéro → média (export).
      Renvoie la place de chaque calque dessiné, pour savoir lequel on
      touche du doigt dans l'aperçu. */
   dessiner(ctx, largeur, hauteur, projet, t, options) {
     const opts = options || {};
     const places = [];
     const actifs = this.actifs(projet, t);
-    // Les images d'abord, les textes par-dessus (toujours lisibles)
-    const ordre = actifs.filter((c) => c.type === 'image').concat(actifs.filter((c) => c.type === 'texte'));
-    for (const calque of ordre) {
-      const alpha = this.opacite(calque, t);
-      if (alpha <= 0) continue;
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      let place = null;
-      if (calque.type === 'texte') {
-        place = this.dessinerTexte(ctx, largeur, hauteur, calque);
-      } else {
-        const media = projet.medias.find((m) => m.id === calque.mediaId);
-        const img = media ? this.image(media, opts.quandPret) : null;
-        if (img) place = this.dessinerImage(ctx, largeur, hauteur, calque, img);
-      }
-      ctx.restore();
-      if (place) {
-        places.push(Object.assign({ id: calque.id }, place));
-        if (opts.selection === calque.id) this._cadreSelection(ctx, place, hauteur);
+    if (actifs.length) {
+      // Les images d'abord, les textes par-dessus (toujours lisibles)
+      const ordre = actifs.length === 1
+        ? actifs
+        : actifs.filter((c) => c.type === 'image').concat(actifs.filter((c) => c.type === 'texte'));
+      for (const calque of ordre) {
+        const alpha = this.opacite(calque, t);
+        if (alpha <= 0) continue;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        let place = null;
+        if (calque.type === 'texte') {
+          place = this.dessinerTexte(ctx, largeur, hauteur, calque);
+        } else {
+          const media = opts.mediasParId
+            ? opts.mediasParId.get(calque.mediaId)
+            : projet.medias.find((m) => m.id === calque.mediaId);
+          const img = media ? this.image(media, opts.quandPret) : null;
+          if (img) place = this.dessinerImage(ctx, largeur, hauteur, calque, img);
+        }
+        ctx.restore();
+        if (place) {
+          places.push(Object.assign({ id: calque.id }, place));
+          if (opts.selection === calque.id) this._cadreSelection(ctx, place, hauteur);
+        }
       }
     }
     // Les sous-titres en dernier : toujours par-dessus tout le reste
@@ -163,10 +197,26 @@ const Rendu = {
 
   /* ---------- Les sous-titres ---------- */
 
-  /* Les sous-titres à l'écran à l'instant t (aucun s'ils sont cachés) */
+  /* Les sous-titres à l'écran à l'instant t (aucun s'ils sont cachés).
+     La liste étant toujours triée par « debut » (et un sous-titre durant
+     60 s au plus), une recherche rapide saute tout de suite près de t. */
   sousTitresActifs(projet, t) {
-    if (!projet.sousTitres || !projet.styleSousTitres.visibles) return [];
-    return projet.sousTitres.filter((s) => t >= s.debut && t < s.debut + s.duree && s.texte.trim());
+    const liste = projet.sousTitres;
+    if (!liste || !liste.length || !projet.styleSousTitres.visibles) return [];
+    const limite = t - 60;
+    let a = 0, b = liste.length;
+    while (a < b) {
+      const m = (a + b) >> 1;
+      if (liste[m].debut <= limite) a = m + 1;
+      else b = m;
+    }
+    const resultat = [];
+    for (let i = a; i < liste.length; i++) {
+      const s = liste[i];
+      if (s.debut > t) break;
+      if (t < s.debut + s.duree && s.texte.trim()) resultat.push(s);
+    }
+    return resultat;
   },
 
   /* Dessine les sous-titres de l'instant t (s'il y en a deux en même
@@ -178,7 +228,7 @@ const Rendu = {
     const style = projet.styleSousTitres;
     ctx.save();
     const place = this.dessinerTexte(ctx, largeur, hauteur, {
-      texte: actifs.map((s) => s.texte.trim()).join('\n'),
+      texte: actifs.length === 1 ? actifs[0].texte.trim() : actifs.map((s) => s.texte.trim()).join('\n'),
       police: 'simple',
       taille: TAILLE_SOUS_TITRES[style.taille],
       couleur: style.couleur,
@@ -204,57 +254,102 @@ const Rendu = {
     return { x, y, l, h };
   },
 
-  /* ---------- Un texte ---------- */
-  dessinerTexte(ctx, largeur, hauteur, calque) {
-    const texte = calque.texte.trim();
-    if (!texte) return null;
+  /* Prépare une petite toile avec le texte déjà dessiné (lignes, bandeau,
+     ombre ou contour). Réutilisée à l'identique tant que le texte et son
+     style ne changent pas : un simple drawImage suffit ensuite. */
+  _preparerTexte(largeur, hauteur, calque, texte) {
+    const marge = calque.marge || MARGE_CALQUE;
+    const cle = largeur + 'x' + hauteur + '|' + calque.police + '|' + calque.taille + '|' +
+      calque.couleur + '|' + calque.style + '|' + (calque.gras ? 1 : 0) + '|' + marge + '|' + texte;
+    const existant = this._cacheTextes.get(cle);
+    if (existant) {
+      // Marque cette entrée comme la plus récente
+      this._cacheTextes.delete(cle);
+      this._cacheTextes.set(cle, existant);
+      return existant;
+    }
+
+    // Une petite toile 1×1 réutilisée pour mesurer les mots avant de créer la toile finale
+    if (!this._ctxMesure) {
+      const m = document.createElement('canvas');
+      m.width = 1; m.height = 1;
+      this._ctxMesure = m.getContext('2d');
+    }
+    const mesure = this._ctxMesure;
+
     // La taille est un pourcentage du CÔTÉ LE PLUS COURT de l'image : un
     // texte garde le même air en horizontal (16:9) et en vertical (9:16).
     let taille = Math.max(6, Math.round(Math.min(largeur, hauteur) * calque.taille / 100));
     const police = POLICES[calque.police] || POLICES.oxanium;
     const graisse = calque.gras ? '700 ' : '400 ';
-    ctx.font = graisse + taille + 'px ' + police.famille;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    mesure.font = graisse + taille + 'px ' + police.famille;
 
     // Coupe le texte en lignes qui tiennent dans la largeur de l'image
-    const largeurMax = () => largeur * (1 - 2 * (calque.marge || MARGE_CALQUE)) - taille * 0.8;
-    let lignes = this._lignes(ctx, texte, largeurMax());
-    let largeurTexte = Math.max(...lignes.map((l) => ctx.measureText(l).width));
+    const largeurMax = () => largeur * (1 - 2 * marge) - taille * 0.8;
+    let lignes = this._lignes(mesure, texte, largeurMax());
+    let largeurTexte = Math.max(...lignes.map((l) => mesure.measureText(l).width));
     // Un mot à lui seul plus large que l'image : on réduit le texte pour qu'il tienne
     if (largeurTexte > largeurMax()) {
       taille = Math.max(6, Math.floor(taille * largeurMax() / largeurTexte));
-      ctx.font = graisse + taille + 'px ' + police.famille;
-      lignes = this._lignes(ctx, texte, largeurMax());
-      largeurTexte = Math.max(...lignes.map((l) => ctx.measureText(l).width));
+      mesure.font = graisse + taille + 'px ' + police.famille;
+      lignes = this._lignes(mesure, texte, largeurMax());
+      largeurTexte = Math.max(...lignes.map((l) => mesure.measureText(l).width));
     }
     const interligne = taille * 1.25;
     const bord = calque.style === 'bandeau' ? taille * 0.35 : taille * 0.12;
-    const place = this._placer(calque, largeur, hauteur,
-      largeurTexte + 2 * bord, lignes.length * interligne + 2 * bord - (interligne - taille));
-    const cx = place.x + place.l / 2;
-    const premier = place.y + bord + taille / 2;
+    const l = largeurTexte + 2 * bord;
+    const h = lignes.length * interligne + 2 * bord - (interligne - taille);
+    // Petite marge autour de la toile pour ne jamais couper l'ombre ni le contour
+    const pad = Math.ceil(taille * 0.65) + 4;
+    const toile = document.createElement('canvas');
+    toile.width = Math.max(1, Math.ceil(l + 2 * pad));
+    toile.height = Math.max(1, Math.ceil(h + 2 * pad));
+    const c = toile.getContext('2d');
 
+    c.font = graisse + taille + 'px ' + police.famille;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    const cx = pad + l / 2;
+    const premier = pad + bord + taille / 2;
     const clair = luminosite(calque.couleur) > 0.45;
     if (calque.style === 'bandeau') {
-      ctx.fillStyle = clair ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255, 255, 255, 0.75)';
-      ctx.beginPath();
-      ctx.roundRect(place.x, place.y, place.l, place.h, taille * 0.25);
-      ctx.fill();
+      c.fillStyle = clair ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255, 255, 255, 0.75)';
+      c.beginPath();
+      c.roundRect(pad, pad, l, h, taille * 0.25);
+      c.fill();
     }
     if (calque.style === 'ombre') {
-      ctx.shadowColor = clair ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.7)';
-      ctx.shadowBlur = taille * 0.18;
-      ctx.shadowOffsetY = taille * 0.05;
+      c.shadowColor = clair ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.7)';
+      c.shadowBlur = taille * 0.18;
+      c.shadowOffsetY = taille * 0.05;
     }
     if (calque.style === 'contour') {
-      ctx.lineJoin = 'round';
-      ctx.lineWidth = Math.max(2, taille * 0.14);
-      ctx.strokeStyle = clair ? '#000000' : '#ffffff';
-      lignes.forEach((l, i) => ctx.strokeText(l, cx, premier + i * interligne));
+      c.lineJoin = 'round';
+      c.lineWidth = Math.max(2, taille * 0.14);
+      c.strokeStyle = clair ? '#000000' : '#ffffff';
+      lignes.forEach((ligne, i) => c.strokeText(ligne, cx, premier + i * interligne));
     }
-    ctx.fillStyle = calque.couleur;
-    lignes.forEach((l, i) => ctx.fillText(l, cx, premier + i * interligne));
+    c.fillStyle = calque.couleur;
+    lignes.forEach((ligne, i) => c.fillText(ligne, cx, premier + i * interligne));
+
+    const entree = { toile, l, h, pad };
+    this._cacheTextes.set(cle, entree);
+    if (this._cacheTextes.size > CACHE_TEXTES_MAX) {
+      const plusAncienne = this._cacheTextes.keys().next().value;
+      const vieille = this._cacheTextes.get(plusAncienne);
+      if (vieille) { vieille.toile.width = 0; vieille.toile.height = 0; }
+      this._cacheTextes.delete(plusAncienne);
+    }
+    return entree;
+  },
+
+  /* ---------- Un texte ---------- */
+  dessinerTexte(ctx, largeur, hauteur, calque) {
+    const texte = calque.texte.trim();
+    if (!texte) return null;
+    const entree = this._preparerTexte(largeur, hauteur, calque, texte);
+    const place = this._placer(calque, largeur, hauteur, entree.l, entree.h);
+    ctx.drawImage(entree.toile, place.x - entree.pad, place.y - entree.pad);
     return place;
   },
 

@@ -76,6 +76,28 @@ const Capacites = {
     const webcodecs = typeof VideoDecoder === 'function' && typeof VideoEncoder === 'function' &&
                       typeof AudioDecoder === 'function' && typeof AudioEncoder === 'function' &&
                       typeof VideoFrame === 'function';
+
+    // Les vérifications indépendantes tournent en parallèle pour accélérer le démarrage
+    const [resWebCodecs, disque, estimation, horsLigne] = await Promise.all([
+      webcodecs
+        ? Promise.all([
+            soutenu(() => VideoDecoder.isConfigSupported({ codec: 'avc1.640028' })),
+            soutenu(() => VideoDecoder.isConfigSupported({ codec: 'hvc1.1.6.L120.90' })),
+            soutenu(() => VideoEncoder.isConfigSupported(configEncodage(1280, 720, 5000000))),
+            soutenu(() => VideoEncoder.isConfigSupported(configEncodage(1920, 1080, 8000000))),
+            choisirEncodeur(1280, 720, 5000000),
+            soutenu(() => AudioDecoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2 })),
+            soutenu(() => AudioDecoder.isConfigSupported({ codec: 'mp3', sampleRate: 44100, numberOfChannels: 2 })),
+            soutenu(() => AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 }))
+          ])
+        : Promise.resolve(null),
+      testerDisquePrive(),
+      (navigator.storage && navigator.storage.estimate)
+        ? avecDelai(navigator.storage.estimate(), 5000).catch(() => null)
+        : Promise.resolve(null),
+      etatHorsLigne()
+    ]);
+
     if (!webcodecs) {
       ajouter('webcodecs', 'bloquant', 'Outils vidéo du navigateur',
         'Ce navigateur ne sait pas traiter la vidéo image par image. Utilise Google Chrome, ' +
@@ -83,8 +105,8 @@ const Capacites = {
       r.peutFonctionner = false;
       r.peutExporter = false;
     } else {
+      const [lectureH264, lectureHevc, encode720, encode1080, puce, lireAac, lireMp3, aacDirect] = resWebCodecs;
       // 4a. Lire les vidéos H.264 (le format habituel des téléphones)
-      const lectureH264 = await soutenu(() => VideoDecoder.isConfigSupported({ codec: 'avc1.640028' }));
       if (lectureH264) {
         ajouter('lecture', 'ok', 'Lecture des vidéos', 'Ta tablette lit les vidéos filmées au téléphone (format H.264).');
       } else {
@@ -94,7 +116,6 @@ const Capacites = {
       }
 
       // 4b. Vidéos « haute efficacité » (HEVC / H.265), choisies par certains téléphones
-      const lectureHevc = await soutenu(() => VideoDecoder.isConfigSupported({ codec: 'hvc1.1.6.L120.90' }));
       if (lectureHevc) {
         ajouter('hevc', 'ok', 'Vidéos « haute efficacité » (HEVC)', 'Elles sont lisibles aussi.');
       } else {
@@ -104,10 +125,6 @@ const Capacites = {
       }
 
       // 4c. Fabriquer la vidéo finale en H.264 (ce que demande YouTube)
-      const encode720 = await soutenu(() => VideoEncoder.isConfigSupported(configEncodage(1280, 720, 5000000)));
-      const encode1080 = await soutenu(() => VideoEncoder.isConfigSupported(configEncodage(1920, 1080, 8000000)));
-      // La puce vidéo : réglage « High », sinon « Main » ou « Baseline » (fabrication.js)
-      const puce = await choisirEncodeur(1280, 720, 5000000);
       const materiel = puce.materiel;
       if (encode1080) {
         ajouter('encodage', 'ok', 'Fabrication de la vidéo finale',
@@ -140,9 +157,7 @@ const Capacites = {
       }
 
       // 4d. Le son : lire (AAC, MP3) et fabriquer (AAC, demandé par YouTube)
-      const lireAac = await soutenu(() => AudioDecoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2 }));
-      const lireMp3 = await soutenu(() => AudioDecoder.isConfigSupported({ codec: 'mp3', sampleRate: 44100, numberOfChannels: 2 }));
-      r.aacDirect = await soutenu(() => AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 }));
+      r.aacDirect = aacDirect;
       if (lireAac && lireMp3) {
         ajouter('son', 'ok', 'Lecture du son', 'Le son des vidéos et les musiques MP3 sont lisibles.');
       } else {
@@ -160,7 +175,6 @@ const Capacites = {
     }
 
     // 5. Le « disque privé » où la vidéo finale est écrite petit à petit
-    const disque = await testerDisquePrive();
     if (disque) {
       ajouter('disque', 'ok', 'Écriture de la vidéo finale',
         'La vidéo finale est écrite petit à petit sur la tablette : même une vidéo de 30 minutes ne remplit pas la mémoire vive.');
@@ -171,23 +185,18 @@ const Capacites = {
     }
 
     // 6. Place disponible
-    try {
-      if (navigator.storage && navigator.storage.estimate) {
-        const estimation = await avecDelai(navigator.storage.estimate(), 5000);
-        if (Number.isFinite(estimation.quota)) {
-          r.espaceLibre = Math.max(0, estimation.quota - (estimation.usage || 0));
-          const minutes = Math.floor(r.espaceLibre / DEBIT_EXPORT['1080p'] / 60);
-          const texte = 'Environ ' + tailleEnTexte(r.espaceLibre) + ' disponibles pour Omni-Vidéo, soit ' +
-            (minutes >= 120 ? 'plus de 2 heures' : 'environ ' + minutes + ' minutes') + ' de vidéo finale en 1080p.';
-          if (minutes < 10) {
-            ajouter('espace', 'attention', 'Place disponible',
-              texte + ' Libère de la place sur la tablette avant de fabriquer une longue vidéo.');
-          } else {
-            ajouter('espace', minutes < 40 ? 'info' : 'ok', 'Place disponible', texte);
-          }
-        }
+    if (estimation && Number.isFinite(estimation.quota)) {
+      r.espaceLibre = Math.max(0, estimation.quota - (estimation.usage || 0));
+      const minutes = Math.floor(r.espaceLibre / DEBIT_EXPORT['1080p'] / 60);
+      const texte = 'Environ ' + tailleEnTexte(r.espaceLibre) + ' disponibles pour Omni-Vidéo, soit ' +
+        (minutes >= 120 ? 'plus de 2 heures' : 'environ ' + minutes + ' minutes') + ' de vidéo finale en 1080p.';
+      if (minutes < 10) {
+        ajouter('espace', 'attention', 'Place disponible',
+          texte + ' Libère de la place sur la tablette avant de fabriquer une longue vidéo.');
+      } else {
+        ajouter('espace', minutes < 40 ? 'info' : 'ok', 'Place disponible', texte);
       }
-    } catch (e) { /* on ne sait pas : on n'affiche rien */ }
+    }
 
     // 7. Mémoire vive (Chrome donne une valeur arrondie : 0,5 / 1 / 2 / 4 / 8)
     if (Number.isFinite(navigator.deviceMemory)) {
@@ -219,7 +228,6 @@ const Capacites = {
             : 'L\'enregistrement de la voix off ne sera pas possible sur ce navigateur.');
 
     // 10. Fonctionnement hors ligne (voir sw.js)
-    const horsLigne = await etatHorsLigne();
     if (horsLigne === 'pret') {
       ajouter('horsligne', 'ok', 'Sans connexion', 'Omni-Vidéo est rangée dans ta tablette : elle fonctionne sans Internet.');
     } else if (horsLigne === 'premiere-visite') {

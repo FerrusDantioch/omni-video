@@ -60,14 +60,25 @@ const Medias = {
   },
 
   /* À l'ouverture d'un projet : on recharge depuis la base les images et
-     musiques qu'Omni-Vidéo garde lui-même. */
+     musiques qu'Omni-Vidéo garde lui-même (en parallèle pour aller plus vite). */
   async chargerFichiersLegers(projet) {
-    for (const media of projet.medias) {
-      if (media.type === 'video' || this.fichiers.has(media.id)) continue;
+    const aCharger = projet.medias.filter((m) => m.type !== 'video' && !this.fichiers.has(m.id));
+    await Promise.all(aCharger.map(async (media) => {
       try {
         const blob = await Base.lireFichier(media.id);
         if (blob) this.fichiers.set(media.id, blob);
       } catch (e) { /* le média sera affiché comme « introuvable » */ }
+    }));
+  },
+
+  /* À la fermeture d'un projet : libère les fichiers légers (images,
+     musiques, voix off) et leurs adresses blob: en mémoire (ils seront
+     relus depuis IndexedDB à la prochaine ouverture). Les vidéos, elles,
+     restent connues pendant la visite pour éviter de les redemander. */
+  oublierFichiersLegers(projet) {
+    if (!projet) return;
+    for (const media of projet.medias) {
+      if (media.type !== 'video') this.oublier(media.id);
     }
   },
 
@@ -207,27 +218,27 @@ async function analyserVideo(fichier) {
     }
     if (!piste) throw erreurPourTous('Ce fichier ne contient pas d\'image vidéo.');
 
-    const infos = {
-      duree: await entree.computeDuration(),
-      largeur: await piste.getDisplayWidth(),
-      hauteur: await piste.getDisplayHeight(),
-      aSon: false,
-      miniature: '',
-      probleme: ''
-    };
+    const [duree, largeur, hauteur, codec, peutLire, son] = await Promise.all([
+      entree.computeDuration(),
+      piste.getDisplayWidth(),
+      piste.getDisplayHeight(),
+      piste.getCodec(),
+      piste.canDecode(),
+      entree.getPrimaryAudioTrack()
+    ]);
 
-    const codec = await piste.getCodec();
-    if (!(await piste.canDecode())) {
+    if (!peutLire) {
       const nom = NOMS_CODECS[codec] || codec || 'inconnu';
       throw erreurPourTous('Cette vidéo est au format ' + nom + ', que ta tablette ne sait pas lire. ' +
         'Pour les prochaines vidéos, règle l\'appareil photo du téléphone sur « H.264 » ou « Le plus compatible ».');
     }
 
-    const son = await entree.getPrimaryAudioTrack();
-    infos.aSon = !!son && (await son.canDecode());
+    const [aSon, miniature] = await Promise.all([
+      son ? son.canDecode() : Promise.resolve(false),
+      miniatureVideo(piste, duree, largeur, hauteur)
+    ]);
 
-    infos.miniature = await miniatureVideo(piste, infos.duree);
-    return infos;
+    return { duree, largeur, hauteur, aSon: !!aSon, miniature, probleme: '' };
   } finally {
     // On referme le fichier : la mémoire utilisée pour l'analyse est rendue
     entree.dispose();
@@ -237,10 +248,8 @@ async function analyserVideo(fichier) {
 /* Une image prise vers le début de la vidéo (à 10 % de la durée, au
    maximum 1 seconde après le début : la toute première image est
    souvent noire). */
-async function miniatureVideo(piste, duree) {
+async function miniatureVideo(piste, duree, largeur, hauteur) {
   const M = Mediabunny;
-  const largeur = await piste.getDisplayWidth();
-  const hauteur = await piste.getDisplayHeight();
   const taille = largeur >= hauteur ? { height: MINIATURE_COTE } : { width: MINIATURE_COTE };
   const sink = new M.CanvasSink(piste, taille);
   const debut = await piste.getFirstTimestamp();

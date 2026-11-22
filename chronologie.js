@@ -33,9 +33,19 @@ const Chronologie = {
   _historique: [],
   _refaire: [],
   _indexAffiche: -2,       // pour ne redessiner les outils que si le clip change
+  _enLectureAffiche: null,
+  _videAffiche: null,
+  _elClipSelectionne: null,
 
   initialiser() {
     const defilement = $('#chrono-defilement');
+    this._elDefilement = defilement;
+    this._elTemps = $('#montage-temps');
+    this._elDuree = $('#montage-duree');
+    this._elBoutonLecture = $('#montage-lecture');
+    this._elBoutonLectureUse = $('use', this._elBoutonLecture);
+    this._elBoutonLectureSpan = $('span', this._elBoutonLecture);
+    this._boutonsCommandes = $$('#commandes-montage button');
 
     // Le doigt fait glisser la bande : l'aperçu suit
     defilement.addEventListener('scroll', () => this._surDefilement(), { passive: true });
@@ -139,15 +149,10 @@ const Chronologie = {
   },
 
   /* ---------- Dessiner la bande ---------- */
-  dessiner() {
+  dessinerRegle() {
     const projet = Projets.courant;
     if (!projet) return;
-    const defilement = $('#chrono-defilement');
-    this._marge = Math.round(defilement.clientWidth / 2);
     const duree = Lecteur.duree();
-    const piste = $('#chrono-piste');
-    piste.style.width = Math.ceil(duree * this.pps + 2 * this._marge) + 'px';
-
     // La règle : un repère toutes les N secondes, N choisi pour garder
     // au moins 70 pixels entre deux repères
     const pas = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1200].find((p) => p * this.pps >= 70) || 1800;
@@ -158,6 +163,18 @@ const Chronologie = {
     // Les chapitres YouTube : un petit drapeau dans la règle
     regle += Chapitres.reperes(projet, this._marge, this.pps);
     $('#chrono-regle').innerHTML = regle;
+  },
+
+  dessiner() {
+    const projet = Projets.courant;
+    if (!projet) return;
+    const defilement = this._elDefilement || $('#chrono-defilement');
+    this._marge = Math.round(defilement.clientWidth / 2);
+    const duree = Lecteur.duree();
+    const piste = $('#chrono-piste');
+    piste.style.width = Math.ceil(duree * this.pps + 2 * this._marge) + 'px';
+
+    this.dessinerRegle();
 
     // Les clips
     $('#chrono-clips').innerHTML = Lecteur.segments.map((seg, i) => {
@@ -178,6 +195,8 @@ const Chronologie = {
     this.dessinerTransitions();
     $('#chronologie-vide').hidden = Lecteur.segments.length > 0;
     this._indexAffiche = -2;
+    this._elClipSelectionne = null;
+    this._defilementAttendu = -1;
     this._placerBande(Lecteur.t);
     this.majPosition();
   },
@@ -222,6 +241,21 @@ const Chronologie = {
         'aria-label="Modifier le sous-titre : ' + proteger(libelle) + '">' +
         (largeur > 30 ? '<span>' + proteger(libelle) + '</span>' : '') + '</button>';
     }).join('');
+  },
+
+  /* Met à jour un seul sous-titre dans la bande (pendant qu'on tape son
+     texte : évite de tout redessiner s'il y a des centaines de sous-titres). */
+  majUnSousTitre(s) {
+    const el = $('#chrono-sous-titres .chrono-sous-titre[data-id="' + CSS.escape(s.id) + '"]');
+    if (!el) { this.dessinerSousTitres(); return; }
+    const largeur = Math.max(6, s.duree * this.pps);
+    const libelle = s.texte.trim().replace(/\n/g, ' ') || '…';
+    el.setAttribute('aria-label', 'Modifier le sous-titre : ' + libelle);
+    if (largeur > 30) {
+      let span = $('span', el);
+      if (!span) { span = document.createElement('span'); el.appendChild(span); }
+      ecrireTexte(span, libelle);
+    }
   },
 
   /* Les pastilles des transitions : une au tout début, une entre chaque
@@ -345,14 +379,16 @@ const Chronologie = {
 
   /* Fait défiler la bande pour que la ligne montre l'instant t */
   _placerBande(t) {
-    const defilement = $('#chrono-defilement');
-    defilement.scrollLeft = Math.round(t * this.pps);
+    const defilement = this._elDefilement || $('#chrono-defilement');
+    const cible = Math.round(t * this.pps);
+    if (cible === this._defilementAttendu) return;
+    defilement.scrollLeft = cible;
     this._defilementAttendu = defilement.scrollLeft;
   },
 
   /* Le doigt a fait glisser la bande */
   _surDefilement() {
-    const defilement = $('#chrono-defilement');
+    const defilement = this._elDefilement || $('#chrono-defilement');
     if (Math.abs(defilement.scrollLeft - this._defilementAttendu) <= 1) return;   // c'est nous
     // On ne déplace l'aperçu qu'une fois par image affichée (60 fois par seconde au plus)
     if (this._demandeDefilement) return;
@@ -379,28 +415,36 @@ const Chronologie = {
   majPosition() {
     if (!Projets.courant) return;
     if (!this._depuisDefilement) this._placerBande(Lecteur.t);
-    ecrireTexte($('#montage-temps'), formaterPosition(Lecteur.t));
-    ecrireTexte($('#montage-duree'), formaterDuree(Lecteur.duree()));
+    ecrireTexte(this._elTemps, formaterPosition(Lecteur.t));
+    ecrireTexte(this._elDuree, formaterDuree(Lecteur.duree()));
 
-    // Bouton Lecture / Pause
-    const bouton = $('#montage-lecture');
-    $('use', bouton).setAttribute('href', Lecteur.enLecture ? '#i-pause' : '#i-lecture');
-    ecrireTexte($('span', bouton), Lecteur.enLecture ? 'Pause' : 'Lecture');
-    $$('#commandes-montage button').forEach((b) => { b.disabled = Lecteur.segments.length === 0; });
+    // Bouton Lecture / Pause et commandes : mis à jour seulement quand l'état change
+    if (Lecteur.enLecture !== this._enLectureAffiche) {
+      this._enLectureAffiche = Lecteur.enLecture;
+      this._elBoutonLectureUse.setAttribute('href', Lecteur.enLecture ? '#i-pause' : '#i-lecture');
+      ecrireTexte(this._elBoutonLectureSpan, Lecteur.enLecture ? 'Pause' : 'Lecture');
+    }
+    const vide = Lecteur.segments.length === 0;
+    if (vide !== this._videAffiche) {
+      this._videAffiche = vide;
+      this._boutonsCommandes.forEach((b) => { b.disabled = vide; });
+    }
 
     // Le clip sous la ligne
     const i = Lecteur.indexA(Lecteur.t);
     if (i !== this._indexAffiche) {
       this._indexAffiche = i;
-      $$('#chrono-clips .chrono-clip').forEach((el) => el.classList.toggle('selectionne', Number(el.dataset.index) === i));
+      if (this._elClipSelectionne) this._elClipSelectionne.classList.remove('selectionne');
+      this._elClipSelectionne = i >= 0 ? $('#chrono-clips .chrono-clip[data-index="' + i + '"]') : null;
+      if (this._elClipSelectionne) this._elClipSelectionne.classList.add('selectionne');
     }
-    this.majOutils();
+    this.majOutils(i);
   },
 
   /* Active ou grise chaque outil selon la situation */
-  majOutils() {
-    const seg = Lecteur.segmentCourant();
-    const i = Lecteur.indexA(Lecteur.t);
+  majOutils(indexConnu) {
+    const i = indexConnu === undefined ? Lecteur.indexA(Lecteur.t) : indexConnu;
+    const seg = i === -1 ? null : Lecteur.segments[i];
     const n = Lecteur.segments.length;
     // Pendant la lecture, tous les outils sont grisés : inutile de tout
     // revérifier 60 fois par seconde, seulement quand le clip change.

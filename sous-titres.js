@@ -292,7 +292,8 @@ const SousTitres = {
     Projets.modifie();
     Incrustations.redessiner(true);
     if (!depuisLeChamp || propriete !== 'texte') this.majEditeur();
-    Chronologie.dessinerSousTitres();
+    if (propriete === 'texte') Chronologie.majUnSousTitre(st);
+    else Chronologie.dessinerSousTitres();
   },
 
   commencerALaLigne() {
@@ -428,6 +429,7 @@ const SousTitres = {
           '<svg class="icone" aria-hidden="true"><use href="#i-crayon"/></svg>Modifier</button>' +
       '</li>').join('');
     this._enCoursAffiche = null;
+    this._elEnCours = null;
     this._majEnCours();
     this._majApparence();
   },
@@ -436,11 +438,29 @@ const SousTitres = {
   _majEnCours() {
     const projet = Projets.courant;
     if (!projet || Onglets.actif !== 'sous-titres' || this.edite) return;
-    const actif = projet.sousTitres.find((s) => Lecteur.t >= s.debut && Lecteur.t < s.debut + s.duree);
+    const liste = projet.sousTitres;
+    const t = Lecteur.t;
+    let actif = null;
+    if (liste.length) {
+      let a = 0, b = liste.length;
+      const limite = t - 60;
+      while (a < b) {
+        const m = (a + b) >> 1;
+        if (liste[m].debut <= limite) a = m + 1;
+        else b = m;
+      }
+      for (let i = a; i < liste.length; i++) {
+        const s = liste[i];
+        if (s.debut > t) break;
+        if (t < s.debut + s.duree) { actif = s; break; }
+      }
+    }
     const id = actif ? actif.id : null;
     if (id === this._enCoursAffiche) return;
     this._enCoursAffiche = id;
-    $$('#liste-sous-titres .carte-sous-titre').forEach((li) => li.classList.toggle('en-cours', li.dataset.id === id));
+    if (this._elEnCours) this._elEnCours.classList.remove('en-cours');
+    this._elEnCours = id ? $('#liste-sous-titres .carte-sous-titre[data-id="' + CSS.escape(id) + '"]') : null;
+    if (this._elEnCours) this._elEnCours.classList.add('en-cours');
   },
 
   /* ---------- Importer un fichier .srt ou .vtt ---------- */

@@ -66,12 +66,42 @@ lancer('Omni-Vidéo', async () => {
     await p.click('#montage-lecture');
   });
 
+  await section('Couper, texte et sous-titre', async () => {
+    // Couper le clip en deux vers 1,5 s (teste la réutilisation du décodeur vidéo/son)
+    await p.evaluate(() => { Lecteur.aller(1.5); });
+    await p.waitForTimeout(200);
+    await p.click('[data-action="couper"]');
+    await p.waitForTimeout(300);
+    const clips = await p.$$eval('#chrono-clips .chrono-clip', (c) => c.length);
+    verifier(clips === 2, 'le clip est coupé en deux morceaux', clips);
+
+    // Ajouter un texte (style ombre par défaut : teste le cache de rendu)
+    await aller(p, '.onglet[data-onglet="textes"]');
+    await aller(p, '[data-action="ajouter-texte"]');
+    await p.fill('#ed-texte', 'Bonjour Omni-Vidéo !');
+    await p.waitForTimeout(200);
+    await aller(p, '[data-action="fermer-editeur"]');
+    const nbTextes = await p.$$eval('#liste-textes > li', (l) => l.length);
+    verifier(nbTextes === 1, 'un texte incrusté est ajouté', nbTextes);
+
+    // Ajouter un sous-titre (teste la recherche binaire et la mise à jour ciblée)
+    await aller(p, '.onglet[data-onglet="sous-titres"]');
+    await aller(p, '[data-action="ajouter-sous-titre"]');
+    await p.fill('#st-texte', 'Sous-titre de test');
+    await p.waitForTimeout(200);
+    await aller(p, '[data-action="fermer-sous-titre"]');
+    const nbSt = await p.$$eval('#liste-sous-titres > li', (l) => l.length);
+    verifier(nbSt === 1, 'un sous-titre est ajouté', nbSt);
+  });
+
   await section('Fabriquer la vidéo MP4', async () => {
     await aller(p, '#bouton-export');
+    const depart = Date.now();
     await p.click('#export-lancer');
     await p.waitForSelector('[data-etape="termine"]:not([hidden]), [data-etape="erreur"]:not([hidden])', { timeout: 180000 });
     const reussi = await p.isVisible('[data-etape="termine"]');
-    verifier(reussi, 'la vidéo est fabriquée', reussi ? '' : await p.textContent('#fenetre-export').catch(() => ''));
+    const dureeExport = ((Date.now() - depart) / 1000).toFixed(1);
+    verifier(reussi, `la vidéo est fabriquée (${dureeExport} s)`, reussi ? '' : await p.textContent('#fenetre-export').catch(() => ''));
     if (!reussi) return;
     const [telechargement] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), p.click('[data-action="export-enregistrer"]')]);
     const chemin = await telechargement.path();

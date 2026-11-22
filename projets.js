@@ -38,7 +38,8 @@ const Projets = {
       if (v) morceaux.push(v + (v > 1 ? ' vidéos' : ' vidéo'));
       if (i) morceaux.push(i + (i > 1 ? ' images' : ' image'));
       if (a) morceaux.push(a + (a > 1 ? ' musiques' : ' musique'));
-      const duree = p.clips.reduce((total, c) => total + (c.fin - c.debut), 0);
+      const segs = Montage.segments(p);
+      const duree = segs.length ? segs[segs.length - 1].fin : 0;
       if (duree > 0) morceaux.push('durée ' + dureeEnMots(duree));
       const voix = p.pistes.filter((x) => x.type === 'voix').length;
       if (voix) morceaux.push(voix + ' voix off');
@@ -109,7 +110,8 @@ const Projets = {
 
   /* Appelé quand on quitte l'écran du projet */
   fermer() {
-    if (!this.courant) return;
+    const projet = this.courant;
+    if (!projet) return;
     this.enregistrerMaintenant();
     if (Enregistreur.enCours) Enregistreur.arreter();
     if (Guide.etape >= 0) Guide.terminer();
@@ -119,6 +121,7 @@ const Projets = {
     Lecteur.vider();
     PistesAudio.vider();
     this.courant = null;
+    Medias.oublierFichiersLegers(projet);
     Rendu.oublierImages();
     Miniature.oublier();
     Incrustations.redessiner(true);
@@ -373,7 +376,7 @@ const Projets = {
       projet.pistes = projet.pistes.filter((x) => x.mediaId !== id);
       PistesAudio.synchroniser();
       PistesAudio.afficherListes();
-      Rendu.oublierImages();
+      Rendu.oublierImage(id);
       if (Incrustations.edite && !Incrustations.calque(Incrustations.edite)) Incrustations.fermerEditeur();
       await Medias.retirer(projet, id);
       this.modifie();

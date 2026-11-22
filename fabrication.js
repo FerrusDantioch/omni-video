@@ -101,24 +101,109 @@ class Annulation extends Error {
 }
 
 
+/* ---------- Cache des fichiers vidéo/audio ouverts pendant un export ----------
+   Quand une même vidéo est découpée en plusieurs clips (coupes, « Enlever
+   les blancs »…), on n'analyse son sommaire MP4 qu'une seule fois. */
+class CacheEntrees {
+  constructor() {
+    this.entrees = new Map();   // mediaId → { entree, videoPret, pisteVideo, sonPret, pisteSon }
+  }
+
+  _obtenir(mediaId, fichier) {
+    let e = this.entrees.get(mediaId);
+    if (!e) {
+      e = {
+        entree: new Mediabunny.Input({ source: new Mediabunny.BlobSource(fichier), formats: Mediabunny.ALL_FORMATS }),
+        videoPret: false, pisteVideo: null,
+        sonPret: false, pisteSon: null
+      };
+      this.entrees.set(mediaId, e);
+    }
+    return e;
+  }
+
+  async pisteVideo(mediaId, fichier) {
+    const e = this._obtenir(mediaId, fichier);
+    if (!e.videoPret) {
+      e.videoPret = true;
+      try {
+        const p = await e.entree.getPrimaryVideoTrack();
+        if (p && await p.canDecode()) e.pisteVideo = p;
+      } catch (err) { /* illisible */ }
+    }
+    return e.pisteVideo;
+  }
+
+  async pisteSon(mediaId, fichier) {
+    const e = this._obtenir(mediaId, fichier);
+    if (!e.sonPret) {
+      e.sonPret = true;
+      try {
+        const p = await e.entree.getPrimaryAudioTrack();
+        if (p && await p.canDecode()) e.pisteSon = p;
+      } catch (err) { /* illisible ou format non géré par Mediabunny */ }
+    }
+    return e.pisteSon;
+  }
+
+  fermer() {
+    for (const e of this.entrees.values()) e.entree.dispose();
+    this.entrees.clear();
+  }
+}
+
+/* Jusqu'où un même décodeur vidéo peut continuer sans fermer : si les clips
+   suivants viennent du MÊME fichier, sans chevauchement et à moins de 3 s
+   en avant (coupes, « Enlever les blancs »), un seul décodeur les enchaîne. */
+const SAUT_REUTILISATION_VIDEO = 3;
+
+function finCourseVideo(segments, i, finExport) {
+  const seg0 = segments[i];
+  const limite = Number.isFinite(finExport) ? finExport : Infinity;
+  let fin = Montage.tempsFichier(seg0, Math.min(seg0.fin, limite));
+  for (let j = i + 1; j < segments.length; j++) {
+    const seg = segments[j];
+    if (seg.debut >= limite) break;
+    if (!seg.media || seg.media.id !== seg0.media.id) break;
+    // Chevauchement (transition enchaînée / glissement) : il faut deux lecteurs distincts
+    if (seg.debut < segments[j - 1].fin - 1e-6) break;
+    const deb = seg.clip.debut;
+    if (deb < fin - 0.02 || deb - fin > SAUT_REUTILISATION_VIDEO) break;
+    fin = Montage.tempsFichier(seg, Math.min(seg.fin, limite));
+  }
+  return fin + 0.15;
+}
+
 /* ---------- Les images d'un clip vidéo ----------
    Lit les images d'un morceau de vidéo, dans l'ordre, une seule fois
    chacune. On garde au plus deux images à la fois (l'actuelle et la
    suivante), toujours refermées après usage. */
 class SourceImages {
-  constructor(fichier, debut) {
+  constructor(fichier, debut, fin, options) {
+    const opts = options || {};
     this.fichier = fichier;
     this.debut = debut;   // le moment de départ, en secondes DANS le fichier
+    this.fin = Number.isFinite(fin) ? fin : Infinity;
+    this.mediaId = opts.mediaId || null;
+    this.cacheEntrees = opts.cacheEntrees || null;
     this.courante = null;
     this.suivante = null;
+    this.tCourant = debut;
     this.fini = false;
   }
 
   async ouvrir() {
-    this.entree = new Mediabunny.Input({ source: new Mediabunny.BlobSource(this.fichier), formats: Mediabunny.ALL_FORMATS });
-    const piste = await this.entree.getPrimaryVideoTrack();
-    if (!piste || !(await piste.canDecode())) { this.fini = true; return; }
-    this.lecture = new Mediabunny.VideoSampleSink(piste).samples(this.debut);
+    let piste;
+    if (this.cacheEntrees && this.mediaId) {
+      piste = await this.cacheEntrees.pisteVideo(this.mediaId, this.fichier);
+    } else {
+      this.entree = new Mediabunny.Input({ source: new Mediabunny.BlobSource(this.fichier), formats: Mediabunny.ALL_FORMATS });
+      const p = await this.entree.getPrimaryVideoTrack();
+      piste = p && (await p.canDecode()) ? p : null;
+    }
+    if (!piste) { this.fini = true; return; }
+    // Passer la fin évite de décoder inutilement des images au-delà du clip
+    this.lecture = new Mediabunny.VideoSampleSink(piste).samples(this.debut, this.fin);
   }
 
   async _lireSuivante() {
@@ -139,6 +224,7 @@ class SourceImages {
       this.courante = this.suivante;
       this.suivante = null;
     }
+    if (this.courante) this.tCourant = this.courante.timestamp;
     return this.courante;
   }
 
@@ -158,21 +244,31 @@ class SourceImages {
    fréquence que la vidéo finale (44 100 au lieu de 48 000 échantillons
    par seconde, par exemple), le son est « réétiré » en douceur. */
 class SourceSon {
-  constructor(media, fichier) {
+  constructor(media, fichier, cacheEntrees) {
     this.media = media;
     this.fichier = fichier;
+    this.cacheEntrees = cacheEntrees || null;
     this.morceaux = [];   // [{ debut (n° d'échantillon), g, d (gauche, droite) }]
     this.finCharge = -Infinity;
     this.fini = false;
     this.muet = false;
+    this._g = new Float32Array(0);
+    this._d = new Float32Array(0);
   }
 
   async ouvrir() {
     try {
-      this.entree = new Mediabunny.Input({ source: new Mediabunny.BlobSource(this.fichier), formats: Mediabunny.ALL_FORMATS });
-      const piste = await this.entree.getPrimaryAudioTrack();
-      if (piste && await piste.canDecode()) {
-        this.sink = new Mediabunny.AudioBufferSink(piste);
+      let piste;
+      if (this.cacheEntrees) {
+        piste = await this.cacheEntrees.pisteSon(this.media.id, this.fichier);
+      } else {
+        this.entree = new Mediabunny.Input({ source: new Mediabunny.BlobSource(this.fichier), formats: Mediabunny.ALL_FORMATS });
+        const p = await this.entree.getPrimaryAudioTrack();
+        piste = p && (await p.canDecode()) ? p : null;
+      }
+      if (piste) {
+        // AudioSampleSink lit directement les nombres du son (sans créer d'AudioBuffer à chaque trame)
+        this.sink = new Mediabunny.AudioSampleSink(piste);
         this.frequence = piste.sampleRate;
         return;
       }
@@ -184,7 +280,10 @@ class SourceSon {
       try {
         const contexte = new OfflineAudioContext(2, 1, FREQUENCE_SON);
         const tampon = await contexte.decodeAudioData(await this.fichier.arrayBuffer());
-        this._ajouterMorceau(0, tampon);
+        const g = tampon.getChannelData(0);
+        const d = tampon.numberOfChannels > 1 ? tampon.getChannelData(1) : g;
+        this.morceaux.push({ debut: 0, g, d });
+        this.finCharge = g.length;
         this.frequence = tampon.sampleRate;
         this.fini = true;
         return;
@@ -193,11 +292,22 @@ class SourceSon {
     this.muet = true;
   }
 
-  _ajouterMorceau(debut, tampon) {
-    const g = tampon.getChannelData(0);
-    const d = tampon.numberOfChannels > 1 ? tampon.getChannelData(1) : g;
-    this.morceaux.push({ debut, g, d });
-    this.finCharge = Math.max(this.finCharge, debut + g.length);
+  _ajouterEchantillon(echantillon) {
+    try {
+      const nb = echantillon.numberOfFrames;
+      const debut = Math.round(echantillon.timestamp * this.frequence);
+      const g = new Float32Array(nb);
+      echantillon.copyTo(g, { planeIndex: 0, format: 'f32-planar' });
+      let d = g;
+      if (echantillon.numberOfChannels > 1) {
+        d = new Float32Array(nb);
+        echantillon.copyTo(d, { planeIndex: 1, format: 'f32-planar' });
+      }
+      this.morceaux.push({ debut, g, d });
+      this.finCharge = Math.max(this.finCharge, debut + nb);
+    } finally {
+      echantillon.close();
+    }
   }
 
   /* Prépare les échantillons de f0 à f1 (numéros dans le fichier) */
@@ -208,7 +318,7 @@ class SourceSon {
     // reprend la lecture à cet endroit
     if (!this.lecture || (premier && f0 < premier.debut - 2) || f0 > this.finCharge + this.frequence * 2) {
       if (this.lecture) { try { await this.lecture.return(); } catch (e) { /* déjà fermé */ } }
-      this.lecture = this.sink.buffers(Math.max(0, f0 / this.frequence - 0.05));
+      this.lecture = this.sink.samples(Math.max(0, f0 / this.frequence - 0.05));
       this.morceaux = [];
       this.finCharge = -Infinity;
       this.fini = false;
@@ -216,10 +326,12 @@ class SourceSon {
     while (this.finCharge < f1 && !this.fini) {
       const r = await this.lecture.next();
       if (r.done) { this.fini = true; break; }
-      this._ajouterMorceau(Math.round(r.value.timestamp * this.frequence), r.value.buffer);
+      this._ajouterEchantillon(r.value);
     }
     // Les morceaux déjà joués sont oubliés (la mémoire reste petite)
-    this.morceaux = this.morceaux.filter((m) => m.debut + m.g.length >= f0 - 1);
+    let garder = 0;
+    while (garder < this.morceaux.length && this.morceaux[garder].debut + this.morceaux[garder].g.length < f0 - 1) garder++;
+    if (garder > 0) this.morceaux.splice(0, garder);
   }
 
   /* Ajoute le son au mélange (tableaux gauche et droite de la vidéo finale)
@@ -237,10 +349,18 @@ class SourceSon {
     const f1 = Math.ceil((tSource + n * vit / FREQUENCE_SON) * fr) + 2;
     await this._charger(f0, f1);
 
-    // On recopie d'abord ces échantillons dans deux tableaux continus
-    const g = new Float32Array(f1 - f0 + 1);
-    const d = new Float32Array(f1 - f0 + 1);
-    for (const m of this.morceaux) {
+    // On recopie d'abord ces échantillons dans deux tableaux continus (réutilisés)
+    const taille = f1 - f0 + 1;
+    if (this._g.length < taille) {
+      this._g = new Float32Array(taille);
+      this._d = new Float32Array(taille);
+    }
+    const g = this._g.subarray(0, taille);
+    const d = this._d.subarray(0, taille);
+    g.fill(0);
+    d.fill(0);
+    for (let mIdx = 0; mIdx < this.morceaux.length; mIdx++) {
+      const m = this.morceaux[mIdx];
       const a = Math.max(f0, m.debut);
       const b = Math.min(f1 + 1, m.debut + m.g.length);
       if (b <= a) continue;
@@ -253,19 +373,29 @@ class SourceSon {
     // de seconde) et glisse en douceur entre deux calculs.
     const pas = fr / FREQUENCE_SON * vit;
     const depart = tSource * fr - f0;
+    const direct = fr === FREQUENCE_SON && vit === 1 && Math.abs(depart) < 1e-4;
     const BLOC = 128;
     for (let k0 = 0; k0 < n; k0 += BLOC) {
       const k1 = Math.min(n, k0 + BLOC);
       const v0 = gainA(tSortie + k0 / FREQUENCE_SON);
       const v1 = gainA(tSortie + k1 / FREQUENCE_SON);
       if (v0 <= 0 && v1 <= 0) continue;
-      for (let k = k0; k < k1; k++) {
-        const pos = depart + k * pas;
-        const j = pos | 0;
-        const f = pos - j;
-        const v = v0 + (v1 - v0) * (k - k0) / BLOC;
-        gauche[ia + k] += (g[j] + (g[j + 1] - g[j]) * f) * v;
-        droite[ia + k] += (d[j] + (d[j + 1] - d[j]) * f) * v;
+      const dv = (v1 - v0) / (k1 - k0);
+      let v = v0;
+      if (direct) {
+        // Même fréquence (48 kHz) et vitesse normale : addition directe, sans réétirer
+        for (let k = k0; k < k1; k++, v += dv) {
+          gauche[ia + k] += g[k] * v;
+          droite[ia + k] += d[k] * v;
+        }
+      } else {
+        for (let k = k0; k < k1; k++, v += dv) {
+          const pos = depart + k * pas;
+          const j = pos | 0;
+          const f = pos - j;
+          gauche[ia + k] += (g[j] + (g[j + 1] - g[j]) * f) * v;
+          droite[ia + k] += (d[j] + (d[j + 1] - d[j]) * f) * v;
+        }
       }
     }
   }
@@ -274,6 +404,7 @@ class SourceSon {
     try { if (this.lecture) await this.lecture.return(); } catch (e) { /* déjà fermé */ }
     if (this.entree) this.entree.dispose();
     this.morceaux = [];
+    this._g = this._d = new Float32Array(0);
   }
 }
 
@@ -284,23 +415,34 @@ class SourceSon {
    calculs que l'aperçu). Quand le volume est harmonisé, on s'en sert deux
    fois : d'abord pour mesurer le volume, puis pour fabriquer la vidéo. */
 class Melangeur {
-  constructor(projet, segments, total, avertissements) {
+  constructor(projet, segments, total, avertissements, cacheEntrees) {
     this.projet = projet;
     this.segments = segments;
     this.total = total;
     this.avertissements = avertissements;
-    this.sons = new Map();   // n° de segment ou de piste → SourceSon
+    this.cacheEntrees = cacheEntrees || null;
+    this.sons = new Map();   // clé (clip ou piste) → SourceSon
     this.echantillon = 0;    // le prochain échantillon à fabriquer
+    // Un seul tableau réutilisé d'une seconde à l'autre (gauche puis droite)
+    this.tampon = new Float32Array(2 * FREQUENCE_SON);
     // Les pistes audio (musique, voix) qui peuvent être lues
     this.pistes = projet.pistes.map((p) => ({ piste: p, media: projet.medias.find((m) => m.id === p.mediaId) }))
       .filter((x) => x.media && Medias.fichiers.has(x.media.id));
+    // Dernière seconde où chaque média vidéo sert encore (pour garder son lecteur ouvert entre deux coupes)
+    this.derniereFinMedia = new Map();
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      if (seg.media.type === 'video' && seg.media.aSon && seg.clip.volume > 0) {
+        this.derniereFinMedia.set(seg.media.id, Math.max(this.derniereFinMedia.get(seg.media.id) || 0, seg.fin));
+      }
+    }
   }
 
   /* Le son d'un segment ou d'une piste (ouvert la première fois) */
   async _sonDe(cle, media) {
     let s = this.sons.get(cle);
     if (!s) {
-      s = new SourceSon(media, Medias.fichiers.get(media.id));
+      s = new SourceSon(media, Medias.fichiers.get(media.id), this.cacheEntrees);
       await s.ouvrir();
       const avertissement = 'Le son de « ' + media.nom + ' » n\'a pas pu être lu : ce passage sera sans ce son.';
       if (s.muet && !this.avertissements.includes(avertissement)) this.avertissements.push(avertissement);
@@ -309,16 +451,29 @@ class Melangeur {
     return s;
   }
 
-  /* Le son de la seconde n° « seconde » : { gauche, droite, t, n } */
+  /* Le son de la seconde n° « seconde » : { donnees, gauche, droite, t, n }.
+     ⚠️ « donnees », « gauche » et « droite » partagent le même tableau : ils
+     doivent être utilisés avant le prochain appel à suivante(). */
   async suivante(seconde) {
     const { projet, segments, total } = this;
     const finBloc = Math.min(total, seconde + 1);
     const e0 = this.echantillon;
     const e1 = Math.round(finBloc * FREQUENCE_SON);
     const n = e1 - e0;
-    const gauche = new Float32Array(n);
-    const droite = new Float32Array(n);
+    const donnees = this.tampon.subarray(0, 2 * n);
+    donnees.fill(0);
+    const gauche = donnees.subarray(0, n);
+    const droite = donnees.subarray(n, 2 * n);
     const tBloc = e0 / FREQUENCE_SON;
+
+    // Deux clips du même fichier qui se chevauchent pendant cette seconde ?
+    const actifsParMedia = new Map();
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      if (seg.fin <= tBloc || seg.debut >= finBloc) continue;
+      if (seg.media.type !== 'video' || !seg.media.aSon || seg.clip.volume <= 0) continue;
+      actifsParMedia.set(seg.media.id, (actifsParMedia.get(seg.media.id) || 0) + 1);
+    }
 
     // Le son des clips vidéo
     for (let i = 0; i < segments.length; i++) {
@@ -329,7 +484,9 @@ class Melangeur {
       const ib = Math.min(n, Math.round(seg.fin * FREQUENCE_SON) - e0);
       if (ib <= ia) continue;
       const tSortie = (e0 + ia) / FREQUENCE_SON;
-      const s = await this._sonDe('clip' + i, seg.media);
+      // Sans chevauchement, on partage le même lecteur audio d'un clip à l'autre du même fichier
+      const cle = actifsParMedia.get(seg.media.id) > 1 ? 'clip' + i : 'media' + seg.media.id;
+      const s = await this._sonDe(cle, seg.media);
       await s.ajouter(gauche, droite, ia, ib, tSortie, Montage.tempsFichier(seg, tSortie),
         (t) => seg.clip.volume * Montage.etat(projet, segments, i, t).son, Montage.vitesse(seg));
     }
@@ -357,13 +514,19 @@ class Melangeur {
 
     // Les sons terminés sont fermés (ils ne resserviront pas)
     for (const [cle, s] of this.sons) {
-      const i = cle.startsWith('clip') ? Number(cle.slice(4)) : -1;
-      const piste = cle.startsWith('piste') ? projet.pistes.find((p) => 'piste' + p.id === cle) : null;
-      const fini = i >= 0 ? segments[i].fin <= finBloc : (piste && piste.debut + PistesAudio.duree(piste, total) <= finBloc);
+      let fini = false;
+      if (cle.startsWith('clip')) {
+        fini = segments[Number(cle.slice(4))].fin <= finBloc;
+      } else if (cle.startsWith('media')) {
+        fini = (this.derniereFinMedia.get(cle.slice(5)) || 0) <= finBloc;
+      } else if (cle.startsWith('piste')) {
+        const piste = projet.pistes.find((p) => 'piste' + p.id === cle);
+        fini = !piste || piste.debut + PistesAudio.duree(piste, total) <= finBloc;
+      }
       if (fini) { await s.fermer(); this.sons.delete(cle); }
     }
     this.echantillon = e1;
-    return { gauche, droite, t: tBloc, n };
+    return { donnees, gauche, droite, t: tBloc, n };
   }
 
   async fermer() {
@@ -389,35 +552,55 @@ class MesureVolume {
   constructor() {
     // Le filtre « K » de la mesure LUFS (norme UIT BS.1770, à 48 kHz) :
     // l'oreille entend moins les graves et un peu plus les aigus
-    this.filtres = [0, 1].map(() => [
-      { b: [1.53512485958697, -2.69169618940638, 1.19839281085285], a: [-1.69065929318241, 0.73248077421585], x1: 0, x2: 0, y1: 0, y2: 0 },
-      { b: [1, -2, 1], a: [-1.99004745483398, 0.99007225036621], x1: 0, x2: 0, y1: 0, y2: 0 }
-    ]);
+    this.etats = new Float64Array(16);   // 2 canaux × 2 filtres × (x1, x2, y1, y2)
     this.taille = FREQUENCE_SON / 10;   // des morceaux de 0,1 seconde
     this.somme = 0;
     this.compte = 0;
     this.morceaux = [];                 // énergie moyenne de chaque morceau de 0,1 s
   }
 
-  _filtrer(f, x) {
-    const y = f.b[0] * x + f.b[1] * f.x1 + f.b[2] * f.x2 - f.a[0] * f.y1 - f.a[1] * f.y2;
-    f.x2 = f.x1; f.x1 = x;
-    f.y2 = f.y1; f.y1 = y;
-    return y;
-  }
-
   ajouter(gauche, droite) {
-    const [fg, fd] = this.filtres;
+    // Les constantes du filtre gardées dans des variables simples :
+    // beaucoup plus rapide sur des millions d'échantillons
+    const b0 = 1.53512485958697, b1 = -2.69169618940638, b2 = 1.19839281085285;
+    const a1 = -1.69065929318241, a2 = 0.73248077421585;
+    const c1 = -1.99004745483398, c2 = 0.99007225036621;
+    const e = this.etats;
+    let gx1 = e[0], gx2 = e[1], gy1 = e[2], gy2 = e[3];
+    let g2x1 = e[4], g2x2 = e[5], g2y1 = e[6], g2y2 = e[7];
+    let dx1 = e[8], dx2 = e[9], dy1 = e[10], dy2 = e[11];
+    let d2x1 = e[12], d2x2 = e[13], d2y1 = e[14], d2y2 = e[15];
+    const taille = this.taille;
+    const morceaux = this.morceaux;
+    let somme = this.somme;
+    let compte = this.compte;
+
     for (let k = 0; k < gauche.length; k++) {
-      const g = this._filtrer(fg[1], this._filtrer(fg[0], gauche[k]));
-      const d = this._filtrer(fd[1], this._filtrer(fd[0], droite[k]));
-      this.somme += g * g + d * d;
-      if (++this.compte === this.taille) {
-        this.morceaux.push(this.somme / this.taille);
-        this.somme = 0;
-        this.compte = 0;
+      const xg = gauche[k];
+      const yg = b0 * xg + b1 * gx1 + b2 * gx2 - a1 * gy1 - a2 * gy2;
+      gx2 = gx1; gx1 = xg; gy2 = gy1; gy1 = yg;
+      const g = yg - 2 * g2x1 + g2x2 - c1 * g2y1 - c2 * g2y2;
+      g2x2 = g2x1; g2x1 = yg; g2y2 = g2y1; g2y1 = g;
+
+      const xd = droite[k];
+      const yd = b0 * xd + b1 * dx1 + b2 * dx2 - a1 * dy1 - a2 * dy2;
+      dx2 = dx1; dx1 = xd; dy2 = dy1; dy1 = yd;
+      const d = yd - 2 * d2x1 + d2x2 - c1 * d2y1 - c2 * d2y2;
+      d2x2 = d2x1; d2x1 = yd; d2y2 = d2y1; d2y1 = d;
+
+      somme += g * g + d * d;
+      if (++compte === taille) {
+        morceaux.push(somme / taille);
+        somme = 0;
+        compte = 0;
       }
     }
+    e[0] = gx1; e[1] = gx2; e[2] = gy1; e[3] = gy2;
+    e[4] = g2x1; e[5] = g2x2; e[6] = g2y1; e[7] = g2y2;
+    e[8] = dx1; e[9] = dx2; e[10] = dy1; e[11] = dy2;
+    e[12] = d2x1; e[13] = d2x2; e[14] = d2y1; e[15] = d2y2;
+    this.somme = somme;
+    this.compte = compte;
   }
 
   /* Le volume de toute la vidéo, en LUFS (-Infinity si silencieuse) */
@@ -440,9 +623,9 @@ class MesureVolume {
 
 /* Écoute tout le son de la vidéo et renvoie le réglage de volume
    (progres(f) : f de 0 à 1) */
-async function mesurerGain(projet, segments, total, avertissements, verifier, progres) {
+async function mesurerGain(projet, segments, total, avertissements, verifier, progres, cacheEntrees) {
   const mesure = new MesureVolume();
-  const ecoute = new Melangeur(projet, segments, total, avertissements);
+  const ecoute = new Melangeur(projet, segments, total, avertissements, cacheEntrees);
   try {
     for (let seconde = 0; seconde < total; seconde++) {
       verifier();
@@ -645,7 +828,10 @@ async function fluxParTravailleur(nom) {
   return new WritableStream({
     // morceau = { type: 'write', data, position }, envoyé par Mediabunny
     async write(morceau) {
-      const donnees = morceau.data.slice();   // une copie, donnée au travailleur
+      // Un morceau complet (cas habituel des blocs de 8 Mo) peut être transféré
+      // sans recopie mémoire au travailleur (Mediabunny ne l'utilise plus ensuite)
+      const complet = morceau.data.byteOffset === 0 && morceau.data.byteLength === morceau.data.buffer.byteLength;
+      const donnees = complet ? morceau.data : morceau.data.slice();
       try {
         await demander({ type: 'ecrire', position: morceau.position, donnees }, [donnees.buffer]);
       } catch (erreur) {
@@ -701,17 +887,31 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
   }
   // La puce vidéo, si elle sait compresser ces images (bien plus rapide)
   const encodeur = await choisirEncodeur(largeur, hauteur, DEBITS_VIDEO[reglages.qualite]);
+  const cacheEntrees = new CacheEntrees();
+  const cachePhotos = new Map();
+  const mediasParId = new Map(projet.medias.map((m) => [m.id, m]));
+  const viderCaches = () => {
+    cacheEntrees.fermer();
+    cachePhotos.forEach((c) => { c.width = 0; c.height = 0; });
+    cachePhotos.clear();
+  };
 
   // 1 bis. Volume harmonisé : on écoute d'abord tout le son de la vidéo
   //    pour mesurer son volume (rapide : aucune image n'est dessinée)
   const departChrono = performance.now();
   const partMesure = reglages.harmoniser ? PART_MESURE : 0;
-  const gain = reglages.harmoniser
-    ? await mesurerGain(projet, segments, total, avertissements, verifier, (f) => suivi({
-      fait: partMesure * f, image: 0, images: nbImages, etape: 'mesure',
-      ecoule: (performance.now() - departChrono) / 1000
-    }))
-    : 1;
+  let gain = 1;
+  try {
+    if (reglages.harmoniser) {
+      gain = await mesurerGain(projet, segments, total, avertissements, verifier, (f) => suivi({
+        fait: partMesure * f, image: 0, images: nbImages, etape: 'mesure',
+        ecoule: (performance.now() - departChrono) / 1000
+      }), cacheEntrees);
+    }
+  } catch (erreur) {
+    viderCaches();
+    throw erreur;
+  }
   const limiteur = new Limiteur();
 
   // 2. Où écrire : le disque privé (même une vidéo de 30 minutes), ou la
@@ -724,6 +924,7 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
     cible = new Mediabunny.StreamTarget(flux, { chunked: true, chunkSize: 8 * 1024 * 1024 });
   } else {
     if (poidsEstime(total, reglages.qualite) > TAILLE_MAX_EN_MEMOIRE) {
+      viderCaches();
       const e = new Error('Pas de disque privé');
       e.name = 'TropLongEnMemoire';
       throw e;
@@ -753,25 +954,24 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
     for (const s of sonsOuverts) await s.fermer();
     imagesOuvertes.clear();
     sonsOuverts.length = 0;
+    viderCaches();
   };
 
   try {
     await sortie.start();
 
     let image = 0;
-    const melange = new Melangeur(projet, segments, total, avertissements);
+    const melange = new Melangeur(projet, segments, total, avertissements, cacheEntrees);
     sonsOuverts.push(melange);
+    const optionsDessin = { cacheEntrees, cachePhotos, mediasParId, finExport: total, curseur: { i: 0 } };
     for (let seconde = 0; seconde < total; seconde++) {
       verifier();
       const finBloc = Math.min(total, seconde + 1);
 
       // ----- 1. Le son de cette seconde -----
-      const { gauche, droite, t: tBloc, n } = await melange.suivante(seconde);
+      const { donnees, gauche, droite, t: tBloc } = await melange.suivante(seconde);
       // Le volume harmonisé, puis le limiteur : jamais de grésillement
       limiteur.appliquer(gauche, droite, gain);
-      const donnees = new Float32Array(2 * n);
-      donnees.set(gauche, 0);
-      donnees.set(droite, n);
       const morceauSon = new Mediabunny.AudioSample({
         data: donnees, format: 'f32-planar', numberOfChannels: 2, sampleRate: FREQUENCE_SON, timestamp: tBloc
       });
@@ -782,7 +982,7 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
       while (image < nbImages && image / IMAGES_PAR_SECONDE < finBloc - 1e-9) {
         verifier();
         const t = image / IMAGES_PAR_SECONDE;
-        await dessinerImage(ctx, largeur, hauteur, projet, segments, t, imagesOuvertes, ajustement, avertissements);
+        await dessinerImage(ctx, largeur, hauteur, projet, segments, t, imagesOuvertes, ajustement, avertissements, optionsDessin);
         await sourceImages.add(t, 1 / IMAGES_PAR_SECONDE);
         image++;
       }
@@ -818,78 +1018,174 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
 }
 
 
+/* Prépare une version déjà redimensionnée d'une photo immobile (évite
+   de la redimensionner 30 fois par seconde pendant tout le clip). */
+function photoRedimensionnee(cachePhotos, mediaId, img, l, h) {
+  const rl = Math.max(1, Math.round(l));
+  const rh = Math.max(1, Math.round(h));
+  const cle = mediaId + '|' + rl + 'x' + rh;
+  const existante = cachePhotos.get(cle);
+  if (existante) return existante;
+  const c = nouvelleToile(rl, rh);
+  c.getContext('2d').drawImage(img, 0, 0, rl, rh);
+  cachePhotos.set(cle, c);
+  if (cachePhotos.size > 4) {
+    const plusAncienne = cachePhotos.keys().next().value;
+    const vieille = cachePhotos.get(plusAncienne);
+    if (vieille) { vieille.width = 0; vieille.height = 0; }
+    cachePhotos.delete(plusAncienne);
+  }
+  return c;
+}
+
 /* ---------- Dessiner une image de la vidéo finale ----------
    Le fond noir, le ou les clips du moment (avec la transparence et le
    glissement des transitions), puis les textes, images et sous-titres. */
 async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouvertes, ajustement, avertissements, options) {
   const opts = options || {};
   const Source = opts.source || SourceImages;
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(0, 0, largeur, hauteur);
+  const estSourceDefaut = Source === SourceImages;
 
   // Les clips visibles à cet instant (deux au plus, pendant une transition)
   const actifs = [];
-  for (let i = 0; i < segments.length; i++) {
+  let depart = 0;
+  if (opts.curseur) {
+    while (opts.curseur.i < segments.length && segments[opts.curseur.i].fin <= t) opts.curseur.i++;
+    depart = opts.curseur.i;
+  }
+  for (let i = depart; i < segments.length; i++) {
     const seg = segments[i];
+    if (seg.debut > t) break;
     if (t >= seg.debut && t < seg.fin) actifs.push({ i, seg, etat: Montage.etat(projet, segments, i, t) });
   }
   // Celui qui arrive « par-dessus » est dessiné en dernier
-  actifs.sort((a, b) => Number(a.etat.dessus) - Number(b.etat.dessus));
+  if (actifs.length > 1) actifs.sort((a, b) => Number(a.etat.dessus) - Number(b.etat.dessus));
 
-  // Les clips vidéo terminés libèrent leur lecteur
+  // Les clips vidéo terminés libèrent leur lecteur — sauf s'il peut être
+  // réutilisé tout de suite par le clip suivant du MÊME fichier
+  const recyclables = [];
   for (const [i, source] of ouvertes) {
-    if (segments[i].fin <= t) { await source.fermer(); ouvertes.delete(i); }
+    if (segments[i].fin <= t) {
+      ouvertes.delete(i);
+      if (estSourceDefaut && source.mediaId && !source.fini) recyclables.push(source);
+      else await source.fermer();
+    }
   }
 
-  for (const { i, seg, etat } of actifs) {
+  // On prépare les images de chaque clip actif avant de peindre la toile
+  const aDessiner = [];
+  for (const item of actifs) {
+    const { i, seg, etat } = item;
     const tFichier = Montage.tempsFichier(seg, t);
     if (seg.media.type === 'video') {
       let source = ouvertes.get(i);
       if (!source) {
         if (!Medias.fichiers.has(seg.media.id)) continue;   // vidéo pas encore retrouvée
-        // Lecture à partir d'ici (le début du clip, ou plus loin pour un
-        // morceau de vidéo fabriqué à part : voir reprise.js)
-        source = new Source(Medias.fichiers.get(seg.media.id), Math.max(seg.clip.debut, tFichier));
-        await source.ouvrir();
-        if (source.fini) avertissements.push('Les images de « ' + seg.media.nom + ' » n\'ont pas pu être lues.');
+        // Un lecteur du même fichier vient de finir juste avant ? On le garde !
+        const idxRec = recyclables.findIndex((r) =>
+          r.mediaId === seg.media.id &&
+          tFichier >= r.tCourant - 0.001 &&
+          tFichier <= r.fin - 0.05 &&
+          tFichier - r.tCourant <= SAUT_REUTILISATION_VIDEO);
+        if (idxRec >= 0) {
+          source = recyclables.splice(idxRec, 1)[0];
+        } else {
+          // Lecture à partir d'ici (le début du clip, ou plus loin pour un
+          // morceau de vidéo fabriqué à part : voir reprise.js)
+          const finRun = estSourceDefaut ? finCourseVideo(segments, i, opts.finExport) : undefined;
+          source = new Source(Medias.fichiers.get(seg.media.id), Math.max(seg.clip.debut, tFichier), finRun, {
+            mediaId: seg.media.id, cacheEntrees: opts.cacheEntrees
+          });
+          await source.ouvrir();
+          const msg = 'Les images de « ' + seg.media.nom + ' » n\'ont pas pu être lues.';
+          if (source.fini && !avertissements.includes(msg)) avertissements.push(msg);
+        }
         ouvertes.set(i, source);
       }
       // L'image est lue même si elle est invisible (fondu au noir) : la
       // lecture du fichier reste ainsi dans l'ordre
       const echantillon = await source.imageA(tFichier);
       if (!echantillon || etat.opacite <= 0) continue;
-      ctx.save();
-      ctx.globalAlpha = etat.opacite;
-      if (etat.decalage) ctx.translate(etat.decalage * largeur, 0);
-      const filtre = Montage.filtre(seg.clip);
-      if (filtre) ctx.filter = filtre;
-      echantillon.drawWithFit(ctx, { fit: ajustement });
-      ctx.restore();
+      aDessiner.push({ type: 'video', seg, etat, echantillon });
     } else if (seg.media.type === 'image') {
       const img = Rendu._images.get(seg.media.id);
       if (!img || etat.opacite <= 0) continue;
-      ctx.save();
-      ctx.globalAlpha = etat.opacite;
-      // Glissement (transition) et zoom lent, autour du centre de l'image
-      const mvt = Montage.mouvement(seg, t);
-      ctx.translate((etat.decalage + mvt.dx) * largeur + largeur / 2, hauteur / 2);
-      ctx.scale(mvt.echelle, mvt.echelle);
-      ctx.translate(-largeur / 2, -hauteur / 2);
-      const filtre = Montage.filtre(seg.clip);
-      if (filtre) ctx.filter = filtre;
+      aDessiner.push({ type: 'image', seg, etat, img, mvt: Montage.mouvement(seg, t) });
+    }
+  }
+  // Les lecteurs non réutilisés sont refermés tout de suite
+  for (const r of recyclables) await r.fermer();
+
+  // Inutile de repeindre le fond noir (2 millions de pixels en 1080p) si le
+  // premier clip est opaque, centré et remplit entièrement le cadre
+  let couvreTout = false;
+  if (aDessiner.length > 0) {
+    const p = aDessiner[0];
+    if (p.etat.opacite >= 1 && !p.etat.decalage) {
+      const ratioToile = largeur / hauteur;
+      if (p.type === 'video') {
+        const w = p.echantillon.displayWidth, h = p.echantillon.displayHeight;
+        couvreTout = ajustement === 'cover' || (h > 0 && Math.abs(w / h - ratioToile) < 0.002);
+      } else if (p.mvt.echelle >= 1 && p.mvt.dx === 0) {
+        couvreTout = ajustement === 'cover' || (p.img.height > 0 && Math.abs(p.img.width / p.img.height - ratioToile) < 0.002);
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+  if (!couvreTout) {
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, largeur, hauteur);
+  }
+
+  for (const p of aDessiner) {
+    const { seg, etat } = p;
+    const filtre = Montage.filtre(seg.clip);
+    if (p.type === 'video') {
+      const simple = etat.opacite >= 1 && !etat.decalage && !filtre;
+      if (simple) {
+        p.echantillon.drawWithFit(ctx, { fit: ajustement });
+      } else {
+        ctx.save();
+        ctx.globalAlpha = etat.opacite;
+        if (etat.decalage) ctx.translate(etat.decalage * largeur, 0);
+        if (filtre) ctx.filter = filtre;
+        p.echantillon.drawWithFit(ctx, { fit: ajustement });
+        ctx.restore();
+      }
+    } else {
+      const { img, mvt } = p;
       const echelle = ajustement === 'cover'
         ? Math.max(largeur / img.width, hauteur / img.height)
         : Math.min(largeur / img.width, hauteur / img.height);
       const l = img.width * echelle;
       const h = img.height * echelle;
-      ctx.drawImage(img, (largeur - l) / 2, (hauteur - h) / 2, l, h);
-      ctx.restore();
+      const immobile = !etat.decalage && mvt.echelle === 1 && mvt.dx === 0;
+      if (immobile && !filtre && opts.cachePhotos) {
+        const pret = photoRedimensionnee(opts.cachePhotos, seg.media.id, img, l, h);
+        if (etat.opacite < 1) {
+          ctx.save();
+          ctx.globalAlpha = etat.opacite;
+          ctx.drawImage(pret, (largeur - pret.width) / 2, (hauteur - pret.height) / 2);
+          ctx.restore();
+        } else {
+          ctx.drawImage(pret, (largeur - pret.width) / 2, (hauteur - pret.height) / 2);
+        }
+      } else {
+        ctx.save();
+        ctx.globalAlpha = etat.opacite;
+        // Glissement (transition) et zoom lent, autour du centre de l'image
+        ctx.translate((etat.decalage + mvt.dx) * largeur + largeur / 2, hauteur / 2);
+        ctx.scale(mvt.echelle, mvt.echelle);
+        ctx.translate(-largeur / 2, -hauteur / 2);
+        if (filtre) ctx.filter = filtre;
+        ctx.drawImage(img, (largeur - l) / 2, (hauteur - h) / 2, l, h);
+        ctx.restore();
+      }
     }
   }
 
   // Les textes, images incrustées et sous-titres : le même dessin que l'aperçu
-  if (opts.calques !== false) Rendu.dessiner(ctx, largeur, hauteur, projet, t, {});
+  if (opts.calques !== false) Rendu.dessiner(ctx, largeur, hauteur, projet, t, { mediasParId: opts.mediasParId });
 }
 
 

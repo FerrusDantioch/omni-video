@@ -28,6 +28,7 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
 | Version 1.1 | Onglet « YouTube » (miniature, chapitres), volume harmonisé, musique qui baisse sous la voix, dupliquer, ralenti / accéléré, photos qui bougent, lumière et couleurs, guide de la première fois, intro et fin réutilisables, reprise d'une longue fabrication interrompue | ✅ |
 | Version 1.2 | Enlever les blancs d'un clip, rappel de sauvegarde, place utilisée et ménage, conseils et pause selon la batterie, signal de fin de fabrication | ✅ |
 | Version 1.3 | Fabrication plus rapide : la puce vidéo est utilisée dès qu'elle le peut, et les longues vidéos peuvent être fabriquées deux morceaux à la fois | ✅ |
+| Version 1.4 | Optimisations de performances : textes et sous-titres mis en cache au rendu, réutilisation des décodeurs sur les coupes, moteur audio plus léger et plus rapide (harmonisation, blancs, AAC), aperçu et chronologie plus fluides | ✅ |
 
 ### Bon à savoir
 
@@ -276,25 +277,13 @@ GitHub redirige automatiquement l'ancienne adresse vers la nouvelle.
 
 1. Toujours dans **Settings**, menu de gauche → **Pages**.
 2. **Source** : `Deploy from a branch`.
-3. **Branch** : choisissez `main` (après avoir fusionné la branche de
-   travail `ccr-a42e77ca-u3d99b` dans `main`, voir plus bas), ou directement
-   la branche de travail pour l'essayer, dossier `/ (root)`. Touchez
-   **Save**.
+3. **Branch** : choisissez `main`, dossier `/ (root)`. Touchez **Save**.
 4. Patientez 1 à 2 minutes, puis rechargez la page : l'adresse apparaît en
    haut. Ce sera : `https://ferrusdantioch.github.io/omni-video/`
 
 > ⚠️ GitHub Pages n'est gratuit que sur les dépôts **publics**.
 
-### 3. Fusionner la branche de travail dans `main` (une fois l'application terminée)
-
-1. Sur la page du dépôt, un bandeau jaune propose **Compare & pull request**
-   pour la branche `ccr-a42e77ca-u3d99b` (sinon : onglet **Pull requests** →
-   **New pull request**, base `main`, compare `ccr-a42e77ca-u3d99b`).
-2. Touchez **Create pull request**, puis **Merge pull request** et
-   **Confirm merge**.
-3. Dans **Settings → Pages**, choisissez la branche `main`.
-
-### 4. Ouvrir et installer l'application sur la tablette
+### 3. Ouvrir et installer l'application sur la tablette
 
 1. Ouvrez l'adresse dans **Chrome**, avec une connexion Internet.
 2. Touchez **Vérifier ma tablette** pour voir ce que la tablette sait faire.

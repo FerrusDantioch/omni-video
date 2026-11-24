@@ -29,6 +29,7 @@ Omni-Vidéo est construite par étapes. Chaque étape est testable sur la tablet
 | Version 1.2 | Enlever les blancs d'un clip, rappel de sauvegarde, place utilisée et ménage, conseils et pause selon la batterie, signal de fin de fabrication | ✅ |
 | Version 1.3 | Fabrication plus rapide : la puce vidéo est utilisée dès qu'elle le peut, et les longues vidéos peuvent être fabriquées deux morceaux à la fois | ✅ |
 | Version 1.4 | Optimisations de performances : textes et sous-titres mis en cache au rendu, réutilisation des décodeurs sur les coupes, moteur audio plus léger et plus rapide (harmonisation, blancs, AAC), aperçu et chronologie plus fluides | ✅ |
+| Version 1.4.1 | Durcissement sécurité (CSP stricte, import `.omnivideo`), correctifs audio / reprise / Safari (`encodeur-aac.wasm`), libération mémoire, compatibilité CSS (`color-mix()`, Firefox) et suite de tests unitaires + statiques | ✅ |
 
 ### Bon à savoir
 
@@ -197,6 +198,7 @@ pouvoir les envoyer depuis un téléphone ou une tablette.
 | `index.html` | Les écrans et **tous les textes affichés** |
 | `styles.css` | Couleurs du thème Omni-système (tout en haut), tailles, mise en page |
 | `app.js` | Le chef d'orchestre : navigation, boutons, démarrage, numéro de version |
+| `compat.js` | Message d'aide affiché si le navigateur est trop ancien pour démarrer l'application |
 | `outils.js` | Petits outils : mise en forme des durées et des tailles, boutons « deux appuis », messages |
 | `stockage.js` | L'enregistrement des projets dans la tablette (IndexedDB) |
 | `capacites.js` | Le test de la tablette (« Vérifier ma tablette ») |
@@ -242,8 +244,16 @@ d’une personne et vérifient le résultat, y compris sans internet. Ils ne
 contactent aucun site. Ils ne servent qu’au développement : l’application
 n’en a pas besoin pour fonctionner.
 
-Il faut [Node.js](https://nodejs.org) (version 22 ou plus récente), puis,
-une seule fois, dans le dossier de l’application :
+Il faut [Node.js](https://nodejs.org) (version 22 ou plus récente). Les
+contrôles statiques (CSP, complétude du service worker, hygiène) et les tests
+unitaires fonctionnent sans aucune dépendance :
+
+```
+node --test tests/verifier-statique.test.mjs tests/unit/*.test.mjs
+```
+
+Pour les tests complets dans un vrai navigateur (Playwright), une seule fois
+dans le dossier de l’application :
 
 ```
 npm install playwright

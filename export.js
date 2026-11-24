@@ -23,15 +23,6 @@ const CLE_QUALITE = 'omnivideo-qualite';
 const CLE_HARMONISER = 'omnivideo-harmoniser';   // 'non' si la case « volume harmonisé » est décochée
 const CLE_SIGNAL = 'omnivideo-signal-fin';       // 'non' si la case « me prévenir à la fin » est décochée
 
-/* Petites aides pour se souvenir de réglages (sans jamais planter si le
-   navigateur refuse) */
-function lireReglage(cle) {
-  try { return localStorage.getItem(cle); } catch (e) { return null; }
-}
-function ecrireReglage(cle, valeur) {
-  try { localStorage.setItem(cle, valeur); } catch (e) { /* pas grave */ }
-}
-
 /* Un nombre avec des espaces entre les milliers : 12345 → « 12 345 » */
 function nombreEnTexte(n) {
   return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
@@ -183,9 +174,13 @@ const Export = {
     }
     try {
       const estimation = await navigator.storage.estimate();
-      const ancien = await DisquePrive.dernierExport();   // il sera effacé avant de commencer
-      const libre = estimation.quota - estimation.usage + (ancien ? ancien.size : 0);
-      if (Number.isFinite(libre) && libre < poids * 1.1) {
+      // Les anciens fichiers d'export et de reprise seront effacés (ou sont déjà en cours de reprise)
+      const recuperable = await DisquePrive.tailleFichiersExport();
+      const libre = estimation.quota - (estimation.usage || 0) + recuperable;
+      const parParties = duree > SEUIL_PARTIES && lireReglage(CLE_SANS_PARTIES) !== 'oui' && disque;
+      const nbParties = parParties ? Math.max(1, Math.ceil(duree / DUREE_PARTIE - 1e-9)) : 1;
+      const besoin = parParties ? poids * (1.1 + 1 / nbParties) : poids * 1.1;
+      if (Number.isFinite(libre) && libre < besoin) {
         return 'Il n\'y a pas assez de place sur la tablette : la vidéo pèsera environ ' + tailleEnTexte(poids) +
           ', et il reste environ ' + tailleEnTexte(Math.max(0, libre)) + '. Libère de la place, ou choisis la qualité 720p.';
       }

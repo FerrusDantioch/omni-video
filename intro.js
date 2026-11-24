@@ -73,6 +73,7 @@ const IntroFin = {
     const correspondance = new Map();
     const nouveauxMedias = [];
     let videosARetrouver = 0;
+    const enregistres = [];
     try {
       for (const m of source.medias) {
         if (!utilises.has(m.id)) continue;
@@ -90,17 +91,29 @@ const IntroFin = {
           if (!contenu) continue;   // fichier perdu : ce qui l'utilise est laissé de côté
           const copie = Object.assign({}, m, { id: nouvelId() });
           await Base.enregistrerFichier(copie.id, contenu);
+          enregistres.push(copie.id);
           Medias.fichiers.set(copie.id, contenu);
           nouveauxMedias.push(copie);
           correspondance.set(m.id, copie.id);
         }
       }
     } catch (e) {
+      for (const id of enregistres) {
+        Medias.oublier(id);
+        await Base.supprimerFichier(id).catch(() => {});
+      }
       Message.probleme(messageErreurStockage(e));
       return;
     }
-    if (Projets.courant !== projet) return;
+    if (Projets.courant !== projet) {
+      for (const id of enregistres) {
+        Medias.oublier(id);
+        await Base.supprimerFichier(id).catch(() => {});
+      }
+      return;
+    }
     Chronologie._memoriser();
+    nouveauxMedias.forEach((m) => Chronologie._mediasUndo.set(m.id, m));
     projet.medias = projet.medias.concat(nouveauxMedias);
 
     // 2. Les clips de l'intro (sans transition à la jointure)

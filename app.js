@@ -12,7 +12,7 @@
 
 /* Numéro de version affiché dans « À propos ». À changer à chaque
    nouvelle version publiée. */
-const VERSION = '1.4.0';
+const VERSION = '1.4.1';
 
 /* ---------- 1. Navigation entre les écrans ----------
    Chaque écran est une <section class="vue" data-vue="…">.
@@ -99,6 +99,8 @@ const ACTIONS = {
   'retour':           () => revenir(),
   'refaire-test':     async () => {
     Capacites.resultat = null;
+    _encodeurs.clear();
+    DisquePrive._essai = null;
     Capacites.afficher();
     await Capacites.tester();
     Capacites.afficher();
@@ -397,7 +399,7 @@ async function demarrer() {
     });
   }
   // Les polices sont chargées tout de suite (la toile ne les attend pas)
-  Rendu.chargerPolices().then(() => Incrustations.redessiner(true));
+  Rendu.chargerPolices().then(() => Incrustations.redessiner(true)).catch(() => {});
 
   // L'application est prête à s'afficher
   $('#chargement').hidden = true;

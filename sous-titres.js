@@ -106,9 +106,11 @@ function tempsSrt(secondes) {
 
 
 const SousTitres = {
-  edite: null,           // numéro du sous-titre qu'on modifie (ou null)
-  _dejaMemorise: false,  // une seule étape « Annuler » par séance de modification
-  _arretA: null,         // « Écouter ce passage » : la lecture s'arrête à cet instant
+  edite: null,                 // numéro du sous-titre qu'on modifie (ou null)
+  _dejaMemorise: false,        // une seule étape « Annuler » par séance de modification
+  _arretA: null,               // « Écouter ce passage » : la lecture s'arrête à cet instant
+  _dernierDecalage: 0,
+  _dernierSensDecalage: 0,
 
   initialiser() {
     $('#st-texte').addEventListener('input', (e) => this.changer('texte', e.target.value, true));
@@ -395,13 +397,15 @@ const SousTitres = {
   decaler(secondes) {
     const projet = Projets.courant;
     if (!projet || !projet.sousTitres.length) return;
-    // Une suite d'appuis sur le même bouton = une seule étape « Annuler »
-    const maintenant = Date.now();
-    if (!this._dernierDecalage || maintenant - this._dernierDecalage > 4000) Chronologie._memoriser();
-    this._dernierDecalage = maintenant;
     // Le premier sous-titre ne peut pas passer avant le tout début
     const decalage = Math.max(secondes, -projet.sousTitres[0].debut);
     if (Math.abs(decalage) < 0.001) { Message.montrer('Le premier sous-titre est déjà au tout début.'); return; }
+    // Une suite d'appuis sur le même bouton = une seule étape « Annuler »
+    const maintenant = Date.now();
+    const direction = Math.sign(decalage);
+    if (!this._dernierDecalage || maintenant - this._dernierDecalage > 4000 || this._dernierSensDecalage !== direction) Chronologie._memoriser();
+    this._dernierDecalage = maintenant;
+    this._dernierSensDecalage = direction;
     projet.sousTitres.forEach((s) => { s.debut = Math.max(0, s.debut + decalage); });
     this._apresModification(true);
     const sens = decalage < 0 ? 'plus tôt' : 'plus tard';

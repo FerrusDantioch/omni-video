@@ -30,9 +30,22 @@ const Miniature = {
   _enCours: null,    // fabrication de l'image en cours
 
   initialiser() {
-    $('#miniature-couleurs').innerHTML = COULEURS_TEXTE.map((c) =>
-      '<button type="button" class="pastille-couleur" data-action="miniature-reglage" data-reglage="couleur" data-valeur="' + c.valeur + '" ' +
-      'style="--couleur:' + c.valeur + '" aria-label="' + c.nom + '"><span>' + c.nom + '</span></button>').join('');
+    const fragCouleurs = document.createDocumentFragment();
+    for (const c of COULEURS_TEXTE) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pastille-couleur';
+      btn.dataset.action = 'miniature-reglage';
+      btn.dataset.reglage = 'couleur';
+      btn.dataset.valeur = c.valeur;
+      btn.style.setProperty('--couleur', c.valeur);
+      btn.setAttribute('aria-label', c.nom);
+      const span = document.createElement('span');
+      span.textContent = c.nom;
+      btn.appendChild(span);
+      fragCouleurs.appendChild(btn);
+    }
+    $('#miniature-couleurs').replaceChildren(fragCouleurs);
     $('#miniature-texte').addEventListener('input', (e) => {
       const projet = Projets.courant;
       if (!projet) return;
@@ -104,12 +117,15 @@ const Miniature = {
     if (this._enCours && this._enCours.cle === cle) return this._enCours.promesse;
     const promesse = imageDuMontage(projet, projet.miniature.t, largeur, hauteur).then((toile) => {
       if (this._enCours && this._enCours.cle === cle) {
+        libererToile(this._fond);
         this._fond = toile;
         this._cleFond = cle;
         this._enCours = null;
         if (Projets.courant === projet) this.dessinerApercu();
+        return toile;
       }
-      return toile;
+      libererToile(toile);
+      return null;
     });
     this._enCours = { cle, promesse };
     promesse.catch(() => { if (this._enCours && this._enCours.cle === cle) this._enCours = null; });
@@ -169,8 +185,13 @@ const Miniature = {
     const fond = await this.preparerFond();
     const { largeur, hauteur } = this.taille(projet);
     const toile = nouvelleToile(largeur, hauteur);
-    this.dessinerSur(toile.getContext('2d', { alpha: false }), largeur, hauteur, projet, fond);
-    const image = await new Promise((reussir) => toile.toBlob(reussir, 'image/jpeg', QUALITE_JPEG_MINIATURE));
+    let image;
+    try {
+      this.dessinerSur(toile.getContext('2d', { alpha: false }), largeur, hauteur, projet, fond);
+      image = await new Promise((reussir) => toile.toBlob(reussir, 'image/jpeg', QUALITE_JPEG_MINIATURE));
+    } finally {
+      libererToile(toile);
+    }
     if (!image) { Message.probleme('La miniature n\'a pas pu être fabriquée. Réessaie.'); return; }
     telechargerFichier(image, nomDeFichier(projet.nom) + '-miniature.jpg');
     Message.montrer('Miniature enregistrée dans « Téléchargements » ✓ (' + tailleEnTexte(image.size) + ')');
@@ -178,6 +199,7 @@ const Miniature = {
 
   /* Le projet est fermé : on oublie l'image */
   oublier() {
+    libererToile(this._fond);
     this._fond = null;
     this._cleFond = '';
     this._enCours = null;
@@ -186,11 +208,15 @@ const Miniature = {
 
 
 const Chapitres = {
+  _titreMemoriseId: null,
+
   initialiser() {
     // Les titres des chapitres changent au fil de la frappe
-    $('#liste-chapitres').addEventListener('input', (e) => {
+    const liste = $('#liste-chapitres');
+    liste.addEventListener('input', (e) => {
       if (e.target.dataset.chapitre) this.changerTitre(e.target.dataset.chapitre, e.target.value);
     });
+    liste.addEventListener('focusout', () => { this._titreMemoriseId = null; });
   },
 
   /* « Ajouter un chapitre à la ligne violette » */
@@ -211,6 +237,7 @@ const Chapitres = {
       return;
     }
     Chronologie._memoriser();
+    this._titreMemoriseId = null;
     const chapitre = { id: nouvelId(), t, titre: '' };
     projet.chapitres = nettoyerChapitres(projet.chapitres.concat([chapitre]));
     this._apresModification();
@@ -218,7 +245,7 @@ const Chapitres = {
       Message.montrer('Le premier chapitre commence toujours au début de la vidéo (0:00). Ajoute le suivant à la ligne violette.');
     }
     // On peut tout de suite écrire son titre
-    const champ = $('#liste-chapitres [data-chapitre="' + chapitre.id + '"]');
+    const champ = $('#liste-chapitres [data-chapitre="' + CSS.escape(chapitre.id) + '"]');
     if (champ) champ.focus();
   },
 
@@ -226,7 +253,13 @@ const Chapitres = {
     const projet = Projets.courant;
     const chapitre = projet && projet.chapitres.find((c) => c.id === id);
     if (!chapitre) return;
-    chapitre.titre = titre.slice(0, 100);
+    const nouveau = titre.slice(0, 100);
+    if (chapitre.titre === nouveau) return;
+    if (this._titreMemoriseId !== id) {
+      Chronologie._memoriser();
+      this._titreMemoriseId = id;
+    }
+    chapitre.titre = nouveau;
     Projets.modifie();
     this.majVerification();
     Chronologie.dessinerRegle();
@@ -244,6 +277,7 @@ const Chapitres = {
       const projet = Projets.courant;
       if (!projet) return;
       Chronologie._memoriser();
+      this._titreMemoriseId = null;
       projet.chapitres = projet.chapitres.filter((c) => c.id !== id);
       this._apresModification();
     });
@@ -333,8 +367,14 @@ const Chapitres = {
 
   /* Les repères dans la règle de la chronologie */
   reperes(projet, marge, pps) {
-    return projet.chapitres.map((c, i) =>
-      '<span class="chrono-chapitre" style="left:' + Math.round(marge + c.t * pps) + 'px">' +
-        proteger(c.titre.trim() || 'Chapitre ' + (i + 1)) + '</span>').join('');
+    const frag = document.createDocumentFragment();
+    projet.chapitres.forEach((c, i) => {
+      const span = document.createElement('span');
+      span.className = 'chrono-chapitre';
+      span.style.left = Math.round(marge + c.t * pps) + 'px';
+      span.textContent = c.titre.trim() || 'Chapitre ' + (i + 1);
+      frag.appendChild(span);
+    });
+    return frag;
   }
 };

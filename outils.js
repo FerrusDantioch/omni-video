@@ -99,6 +99,86 @@ function attendre(ms) {
   return new Promise((fin) => setTimeout(fin, ms));
 }
 
+/* Abandonne une attente trop longue (certains navigateurs ne répondent jamais). */
+function avecDelai(promesse, ms) {
+  let minuteur;
+  const attente = new Promise((_, echouer) => {
+    minuteur = setTimeout(() => echouer(new Error('Délai dépassé')), ms);
+  });
+  return Promise.race([Promise.resolve(promesse), attente]).finally(() => clearTimeout(minuteur));
+}
+
+/* Pose une question « est-ce pris en charge ? » au navigateur, sans
+   jamais planter : une erreur ou une réponse trop lente = « non ». */
+async function soutenu(question) {
+  try {
+    const reponse = await avecDelai(question(), 5000);
+    return !!(reponse && reponse.supported);
+  } catch (e) {
+    return false;
+  }
+}
+
+/* Petites aides pour se souvenir de réglages (sans jamais planter si le
+   navigateur refuse). */
+function lireReglage(cle) {
+  try { return localStorage.getItem(cle); } catch (e) { return null; }
+}
+
+function ecrireReglage(cle, valeur) {
+  try { localStorage.setItem(cle, valeur); } catch (e) { /* pas grave */ }
+}
+
+/* Profils H.264 essayés par ordre de préférence (puce vidéo et test de capacité). */
+const PROFILS_H264 = [
+  { profil: 'High', code: '6400' },
+  { profil: 'Main', code: '4d00' },
+  { profil: 'Baseline', code: '42e0' }
+];
+
+/* Vérifie qu'une miniature importée est bien une image PNG, JPEG ou WebP
+   en Base64 (jamais de SVG ni de code caché). */
+const REGEX_MINIATURE = /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]{1,300000}$/;
+
+function miniatureValide(valeur) {
+  return typeof valeur === 'string' && REGEX_MINIATURE.test(valeur);
+}
+
+/* Petites aides pour les dessins (« toiles ») */
+function nouvelleToile(largeur, hauteur) {
+  const toile = document.createElement('canvas');
+  toile.width = largeur;
+  toile.height = hauteur;
+  return toile;
+}
+
+function libererToile(toile) {
+  if (!toile) return;
+  toile.width = 0;
+  toile.height = 0;
+}
+
+/* Une toile → un fichier image (Blob) */
+function toileEnBlob(toile, type, qualite) {
+  if (typeof toile.convertToBlob === 'function') return toile.convertToBlob({ type, quality: qualite });
+  return new Promise((reussir, echouer) => {
+    toile.toBlob((blob) => (blob ? reussir(blob) : echouer(new Error('Image impossible'))), type, qualite);
+  });
+}
+
+/* Une toile → une petite image écrite en texte (« data:image/… »),
+   facile à ranger dans la description du projet. */
+async function toileEnImage(toile, type, qualite) {
+  if (typeof toile.toDataURL === 'function') return toile.toDataURL(type, qualite);
+  const blob = await toileEnBlob(toile, type, qualite);
+  return new Promise((reussir) => {
+    const lecteur = new FileReader();
+    lecteur.onload = () => reussir(lecteur.result);
+    lecteur.onerror = () => reussir('');
+    lecteur.readAsDataURL(blob);
+  });
+}
+
 /* Protège un texte avant de l'écrire dans la page en HTML : un nom de
    fichier comme « <vacances>.mp4 » doit s'afficher tel quel, et jamais
    être compris comme du code. */
@@ -121,8 +201,9 @@ function telechargerFichier(blob, nom) {
   document.body.appendChild(lien);
   lien.click();
   lien.remove();
-  // L'adresse est libérée un peu plus tard, une fois le fichier enregistré
-  setTimeout(() => URL.revokeObjectURL(adresse), 60000);
+  // L'adresse est libérée après un délai proportionnel à la taille (2 min à 30 min)
+  const delai = Math.max(120000, Math.min(30 * 60 * 1000, Math.ceil(((blob && blob.size) || 0) / (512 * 1024)) * 1000));
+  setTimeout(() => URL.revokeObjectURL(adresse), delai);
 }
 
 /* Un nom de fichier sans caractères interdits ni accents : « Ma vidéo :
@@ -146,7 +227,7 @@ function nomDeFichier(nom) {
 function armerBouton(bouton, texteArme, action) {
   if (!bouton.classList.contains('arme')) {
     bouton.classList.add('arme');
-    bouton.dataset.texteOriginal = bouton.innerHTML;
+    bouton._enfantsOriginaux = Array.from(bouton.childNodes);
     bouton.textContent = texteArme;
     // Le nom lu par les lecteurs d'écran change aussi (« Confirmer ? »)
     if (bouton.hasAttribute('aria-label')) {
@@ -166,10 +247,10 @@ function armerBouton(bouton, texteArme, action) {
 function desarmerBouton(bouton) {
   clearTimeout(bouton._minuteurArme);
   bouton.classList.remove('arme');
-  if (bouton.dataset.texteOriginal) {
+  if (bouton._enfantsOriginaux) {
     // On remet exactement ce qu'il y avait (icône comprise)
-    bouton.innerHTML = bouton.dataset.texteOriginal;
-    delete bouton.dataset.texteOriginal;
+    bouton.replaceChildren(...bouton._enfantsOriginaux);
+    delete bouton._enfantsOriginaux;
   }
   if (bouton.dataset.ariaOriginal) {
     bouton.setAttribute('aria-label', bouton.dataset.ariaOriginal);

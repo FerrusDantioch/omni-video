@@ -51,7 +51,6 @@ function poidsEstime(duree, qualite) {
    Renvoie { materiel: vrai/faux, codec, profil } (codec absent = ordinaire).
    Si la puce a déjà fait échouer une fabrication, on ne l'essaie plus. */
 const CLE_SANS_MATERIEL = 'omnivideo-sans-materiel';
-const PROFILS_H264 = [{ profil: 'High', code: '6400' }, { profil: 'Main', code: '4d00' }, { profil: 'Baseline', code: '42e0' }];
 const _encodeurs = new Map();
 
 function choisirEncodeur(largeur, hauteur, debit) {
@@ -252,6 +251,9 @@ class SourceSon {
     this.finCharge = -Infinity;
     this.fini = false;
     this.muet = false;
+    this._aEuMorceau = false;
+    this._pisteVide = false;
+    this._debutLecture = Infinity;
     this._g = new Float32Array(0);
     this._d = new Float32Array(0);
   }
@@ -312,20 +314,31 @@ class SourceSon {
 
   /* Prépare les échantillons de f0 à f1 (numéros dans le fichier) */
   async _charger(f0, f1) {
-    if (!this.sink) return;
+    if (!this.sink || this._pisteVide) return;
     const premier = this.morceaux[0];
     // Retour en arrière (musique qui recommence) ou grand saut : on
     // reprend la lecture à cet endroit
-    if (!this.lecture || (premier && f0 < premier.debut - 2) || f0 > this.finCharge + this.frequence * 2) {
+    const aReouvrir = !this.lecture ||
+      (premier ? f0 < premier.debut - 2 : f0 < this.finCharge) ||
+      (f0 > this.finCharge + this.frequence * 2 && !(this.fini && !this._aEuMorceau && f0 >= this._debutLecture));
+    if (aReouvrir) {
       if (this.lecture) { try { await this.lecture.return(); } catch (e) { /* déjà fermé */ } }
-      this.lecture = this.sink.samples(Math.max(0, f0 / this.frequence - 0.05));
+      const depart = Math.max(0, f0 / this.frequence - 0.05);
+      this.lecture = this.sink.samples(depart);
       this.morceaux = [];
       this.finCharge = -Infinity;
       this.fini = false;
+      this._aEuMorceau = false;
+      this._debutLecture = depart === 0 ? 0 : f0;
     }
     while (this.finCharge < f1 && !this.fini) {
       const r = await this.lecture.next();
-      if (r.done) { this.fini = true; break; }
+      if (r.done) {
+        this.fini = true;
+        if (!this._aEuMorceau && this._debutLecture === 0) this._pisteVide = true;
+        break;
+      }
+      this._aEuMorceau = true;
       this._ajouterEchantillon(r.value);
     }
     // Les morceaux déjà joués sont oubliés (la mémoire reste petite)
@@ -428,6 +441,7 @@ class Melangeur {
     // Les pistes audio (musique, voix) qui peuvent être lues
     this.pistes = projet.pistes.map((p) => ({ piste: p, media: projet.medias.find((m) => m.id === p.mediaId) }))
       .filter((x) => x.media && Medias.fichiers.has(x.media.id));
+    this.voix = PistesAudio.indexerVoix(projet, total);
     // Dernière seconde où chaque média vidéo sert encore (pour garder son lecteur ouvert entre deux coupes)
     this.derniereFinMedia = new Map();
     for (let i = 0; i < segments.length; i++) {
@@ -498,7 +512,7 @@ class Melangeur {
       let ia = Math.max(0, Math.round(piste.debut * FREQUENCE_SON) - e0);
       const ib = Math.min(n, Math.round(finPiste * FREQUENCE_SON) - e0);
       const s = await this._sonDe('piste' + piste.id, media);
-      const gainA = (t) => PistesAudio.volumeA(piste, t, total, projet);
+      const gainA = (t) => PistesAudio.volumeA(piste, t, total, projet, this.voix);
       // Une musique qui recommence au début pendant cette seconde : en deux fois
       while (ia < ib) {
         const tSortie = (e0 + ia) / FREQUENCE_SON;
@@ -721,6 +735,27 @@ const DisquePrive = {
     if (dossier) await dossier.removeEntry(NOM_FICHIER_EXPORT).catch(() => {});
   },
 
+  /* Place occupée dans le disque privé par les fichiers d'export et de reprise d'Omni-Vidéo */
+  async tailleFichiersExport() {
+    const dossier = await this.dossier();
+    if (!dossier) return 0;
+    let total = 0;
+    if (typeof dossier.entries === 'function') {
+      try {
+        for await (const [nom, poignee] of dossier.entries()) {
+          if (poignee.kind !== 'file') continue;
+          if (nom === NOM_FICHIER_EXPORT || (typeof NOM_FICHIER_SON !== 'undefined' && nom === NOM_FICHIER_SON) || nom.startsWith('omnivideo-partie-')) {
+            const f = await poignee.getFile().catch(() => null);
+            if (f) total += f.size;
+          }
+        }
+        return total;
+      } catch (e) { /* repli ci-dessous */ }
+    }
+    const dernier = await this.dernierExport();
+    return dernier ? dernier.size : 0;
+  },
+
   /* Crée le fichier « nom » (vide) et renvoie { poignee, flux } pour
      l'écrire petit à petit, ou null si la tablette ne sait pas.
      Deux façons d'écrire :
@@ -782,6 +817,7 @@ async function fluxParTravailleur(nom) {
   const attentes = new Map();   // n° du message → sa promesse
   let numero = 0;
   let arrete = false;
+  let promesseFermeture = null;
   const toutRefuser = (erreur) => {
     for (const a of attentes.values()) a.echec(erreur);
     attentes.clear();
@@ -797,6 +833,8 @@ async function fluxParTravailleur(nom) {
   };
   travailleur.onerror = (e) => {
     e.preventDefault();
+    arrete = true;
+    travailleur.terminate();
     toutRefuser(new Error('Le travailleur du disque privé s\'est arrêté'));
   };
   const demander = (message, transfert) => new Promise((reussite, echec) => {
@@ -806,15 +844,19 @@ async function fluxParTravailleur(nom) {
     travailleur.postMessage(message, transfert || []);
   });
   // Fermer le fichier (le reste du programme pourra le relire ou l'effacer)
-  const fermer = async () => {
-    if (arrete) return;
-    try {
-      await demander({ type: 'fermer' });
-    } finally {
-      arrete = true;
-      travailleur.terminate();
-      toutRefuser(new Error('Fichier fermé'));
-    }
+  const fermer = () => {
+    if (promesseFermeture) return promesseFermeture;
+    promesseFermeture = (async () => {
+      if (arrete) return;
+      try {
+        await avecDelai(demander({ type: 'fermer' }), 5000);
+      } finally {
+        arrete = true;
+        travailleur.terminate();
+        toutRefuser(new Error('Fichier fermé'));
+      }
+    })();
+    return promesseFermeture;
   };
 
   try {
@@ -892,7 +934,7 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
   const mediasParId = new Map(projet.medias.map((m) => [m.id, m]));
   const viderCaches = () => {
     cacheEntrees.fermer();
-    cachePhotos.forEach((c) => { c.width = 0; c.height = 0; });
+    cachePhotos.forEach((c) => libererToile(c));
     cachePhotos.clear();
   };
 
@@ -933,82 +975,90 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
   }
 
   // 3. La toile où chaque image est dessinée, et le fichier de sortie
-  const toile = document.createElement('canvas');
-  toile.width = largeur;
-  toile.height = hauteur;
+  const toile = nouvelleToile(largeur, hauteur);
   const ctx = toile.getContext('2d', { alpha: false });
-  const sortie = new Mediabunny.Output({
-    format: new Mediabunny.Mp4OutputFormat({ fastStart: flux ? false : 'in-memory' }),
-    target: cible
-  });
-  const sourceImages = new Mediabunny.CanvasSource(toile, reglagesImages(reglages.qualite, encodeur));
-  const sourceSon = new Mediabunny.AudioSampleSource({ codec: 'aac', bitrate: DEBIT_SON });
-  sortie.addVideoTrack(sourceImages, { frameRate: IMAGES_PAR_SECONDE });
-  sortie.addAudioTrack(sourceSon);
-  sortie.setMetadataTags({ title: projet.nom });
-
-  const imagesOuvertes = new Map();   // n° de segment → SourceImages
-  const sonsOuverts = [];             // le mélangeur du son
-  const fermerTout = async () => {
-    for (const s of imagesOuvertes.values()) await s.fermer();
-    for (const s of sonsOuverts) await s.fermer();
-    imagesOuvertes.clear();
-    sonsOuverts.length = 0;
-    viderCaches();
-  };
-
   try {
-    await sortie.start();
+    const sortie = new Mediabunny.Output({
+      format: new Mediabunny.Mp4OutputFormat({ fastStart: flux ? false : 'in-memory' }),
+      target: cible
+    });
+    const sourceImages = new Mediabunny.CanvasSource(toile, reglagesImages(reglages.qualite, encodeur));
+    const sourceSon = new Mediabunny.AudioSampleSource({ codec: 'aac', bitrate: DEBIT_SON });
+    sortie.addVideoTrack(sourceImages, { frameRate: IMAGES_PAR_SECONDE });
+    sortie.addAudioTrack(sourceSon);
+    sortie.setMetadataTags({ title: projet.nom });
 
-    let image = 0;
-    const melange = new Melangeur(projet, segments, total, avertissements, cacheEntrees);
-    sonsOuverts.push(melange);
-    const optionsDessin = { cacheEntrees, cachePhotos, mediasParId, finExport: total, curseur: { i: 0 } };
-    for (let seconde = 0; seconde < total; seconde++) {
-      verifier();
-      const finBloc = Math.min(total, seconde + 1);
+    const imagesOuvertes = new Map();   // n° de segment → SourceImages
+    const sonsOuverts = [];             // le mélangeur du son
+    const fermerTout = async () => {
+      for (const s of imagesOuvertes.values()) await s.fermer();
+      for (const s of sonsOuverts) await s.fermer();
+      imagesOuvertes.clear();
+      sonsOuverts.length = 0;
+      viderCaches();
+    };
 
-      // ----- 1. Le son de cette seconde -----
-      const { donnees, gauche, droite, t: tBloc } = await melange.suivante(seconde);
-      // Le volume harmonisé, puis le limiteur : jamais de grésillement
-      limiteur.appliquer(gauche, droite, gain);
-      const morceauSon = new Mediabunny.AudioSample({
-        data: donnees, format: 'f32-planar', numberOfChannels: 2, sampleRate: FREQUENCE_SON, timestamp: tBloc
-      });
-      await sourceSon.add(morceauSon);
-      morceauSon.close();
+    try {
+      await sortie.start();
 
-      // ----- 2. Les images de cette seconde -----
-      while (image < nbImages && image / IMAGES_PAR_SECONDE < finBloc - 1e-9) {
+      let image = 0;
+      const melange = new Melangeur(projet, segments, total, avertissements, cacheEntrees);
+      sonsOuverts.push(melange);
+      const optionsDessin = { cacheEntrees, cachePhotos, mediasParId, finExport: total, curseur: { i: 0 } };
+      for (let seconde = 0; seconde < total; seconde++) {
         verifier();
-        const t = image / IMAGES_PAR_SECONDE;
-        await dessinerImage(ctx, largeur, hauteur, projet, segments, t, imagesOuvertes, ajustement, avertissements, optionsDessin);
-        await sourceImages.add(t, 1 / IMAGES_PAR_SECONDE);
-        image++;
+        const finBloc = Math.min(total, seconde + 1);
+
+        // ----- 1. Le son de cette seconde -----
+        const { donnees, gauche, droite, t: tBloc } = await melange.suivante(seconde);
+        // Le volume harmonisé, puis le limiteur : jamais de grésillement
+        limiteur.appliquer(gauche, droite, gain);
+        const morceauSon = new Mediabunny.AudioSample({
+          data: donnees, format: 'f32-planar', numberOfChannels: 2, sampleRate: FREQUENCE_SON, timestamp: tBloc
+        });
+        try {
+          await sourceSon.add(morceauSon);
+        } finally {
+          morceauSon.close();
+        }
+
+        // ----- 2. Les images de cette seconde -----
+        while (image < nbImages && image / IMAGES_PAR_SECONDE < finBloc - 1e-9) {
+          verifier();
+          const t = image / IMAGES_PAR_SECONDE;
+          await dessinerImage(ctx, largeur, hauteur, projet, segments, t, imagesOuvertes, ajustement, avertissements, optionsDessin);
+          await sourceImages.add(t, 1 / IMAGES_PAR_SECONDE);
+          image++;
+        }
+
+        suivi({
+          fait: partMesure + (1 - partMesure) * finBloc / total, image, images: nbImages, etape: 'images',
+          ecoule: (performance.now() - departChrono) / 1000
+        });
       }
 
-      suivi({
-        fait: partMesure + (1 - partMesure) * finBloc / total, image, images: nbImages, etape: 'images',
-        ecoule: (performance.now() - departChrono) / 1000
-      });
+      verifier();
+      suivi({ fait: 1, image, images: nbImages, etape: 'finition' });
+      await fermerTout();
+      await sortie.finalize();
+    } catch (erreur) {
+      await fermerTout().catch(() => {});
+      if (sortie.state !== 'finalized' && sortie.state !== 'canceled') await sortie.cancel().catch(() => {});
+      if (flux) await flux.abort().catch(() => {});
+      if (poignee) await DisquePrive.effacer();
+      if (encodeur.materiel && erreur && erreur.name !== 'Annulation') {
+        // La puce vidéo a refusé : on recommence tout de suite par le
+        // processeur (si le souci venait d'ailleurs, il reviendra et s'affichera)
+        noterEchecMateriel(erreur, encodeur);
+        if (lireReglage(CLE_SANS_MATERIEL) === 'oui') {
+          libererToile(toile);
+          return fabriquerVideo(projet, reglages, suivi, arret);
+        }
+      }
+      throw erreur;
     }
-
-    verifier();
-    suivi({ fait: 1, image, images: nbImages, etape: 'finition' });
-    await fermerTout();
-    await sortie.finalize();
-  } catch (erreur) {
-    await fermerTout().catch(() => {});
-    if (sortie.state !== 'finalized' && sortie.state !== 'canceled') await sortie.cancel().catch(() => {});
-    if (flux) await flux.abort().catch(() => {});
-    if (poignee) await DisquePrive.effacer();
-    if (encodeur.materiel && erreur && erreur.name !== 'Annulation') {
-      // La puce vidéo a refusé : on recommence tout de suite par le
-      // processeur (si le souci venait d'ailleurs, il reviendra et s'affichera)
-      noterEchecMateriel(erreur, encodeur);
-      if (lireReglage(CLE_SANS_MATERIEL) === 'oui') return fabriquerVideo(projet, reglages, suivi, arret);
-    }
-    throw erreur;
+  } finally {
+    libererToile(toile);
   }
 
   const fichier = poignee
@@ -1032,7 +1082,7 @@ function photoRedimensionnee(cachePhotos, mediaId, img, l, h) {
   if (cachePhotos.size > 4) {
     const plusAncienne = cachePhotos.keys().next().value;
     const vieille = cachePhotos.get(plusAncienne);
-    if (vieille) { vieille.width = 0; vieille.height = 0; }
+    if (vieille) libererToile(vieille);
     cachePhotos.delete(plusAncienne);
   }
   return c;
@@ -1148,7 +1198,7 @@ async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouverte
         ctx.save();
         ctx.globalAlpha = etat.opacite;
         if (etat.decalage) ctx.translate(etat.decalage * largeur, 0);
-        if (filtre) ctx.filter = filtre;
+        if (filtre && 'filter' in ctx) ctx.filter = filtre;
         p.echantillon.drawWithFit(ctx, { fit: ajustement });
         ctx.restore();
       }
@@ -1177,7 +1227,7 @@ async function dessinerImage(ctx, largeur, hauteur, projet, segments, t, ouverte
         ctx.translate((etat.decalage + mvt.dx) * largeur + largeur / 2, hauteur / 2);
         ctx.scale(mvt.echelle, mvt.echelle);
         ctx.translate(-largeur / 2, -hauteur / 2);
-        if (filtre) ctx.filter = filtre;
+        if (filtre && 'filter' in ctx) ctx.filter = filtre;
         ctx.drawImage(img, (largeur - l) / 2, (hauteur - h) / 2, l, h);
         ctx.restore();
       }

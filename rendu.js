@@ -57,6 +57,7 @@ const Rendu = {
   /* Images incrustées déjà prêtes à dessiner (numéro du média → image) */
   _images: new Map(),
   _enChargement: new Set(),
+  _generation: 0,
   /* Textes et sous-titres déjà dessinés sur une petite toile : évite de
      recalculer les lignes et les ombres 30 fois par seconde pour un texte
      qui ne change pas. */
@@ -83,11 +84,21 @@ const Rendu = {
     if (!this._enChargement.has(media.id)) {
       const fichier = Medias.fichiers.get(media.id);
       if (fichier) {
+        const gen = this._generation;
         this._enChargement.add(media.id);
         createImageBitmap(fichier)
-          .then((img) => { this._images.set(media.id, img); if (quandPrete) quandPrete(); })
+          .then((img) => {
+            if (gen !== this._generation || !this._enChargement.has(media.id) || this._images.has(media.id)) {
+              if (img && img.close) img.close();
+              return;
+            }
+            this._images.set(media.id, img);
+            if (quandPrete) quandPrete();
+          })
           .catch(() => {})
-          .finally(() => this._enChargement.delete(media.id));
+          .finally(() => {
+            if (gen === this._generation) this._enChargement.delete(media.id);
+          });
       }
     }
     return null;
@@ -97,6 +108,7 @@ const Rendu = {
      l'export : chaque image de la vidéo finale doit être complète dès la
      première fois, sans attendre. */
   async preparerImages(projet) {
+    const gen = this._generation;
     const ids = new Set();
     projet.calques.forEach((c) => { if (c.type === 'image') ids.add(c.mediaId); });
     projet.clips.forEach((c) => {
@@ -106,12 +118,20 @@ const Rendu = {
     await Promise.all(Array.from(ids).map(async (id) => {
       const fichier = Medias.fichiers.get(id);
       if (this._images.has(id) || !fichier) return;
-      try { this._images.set(id, await createImageBitmap(fichier)); } catch (e) { /* image illisible : ignorée */ }
+      try {
+        const img = await createImageBitmap(fichier);
+        if (gen !== this._generation || this._images.has(id)) {
+          if (img && img.close) img.close();
+          return;
+        }
+        this._images.set(id, img);
+      } catch (e) { /* image illisible : ignorée */ }
     }));
   },
 
   /* Libère une seule image en mémoire (quand on retire un fichier du projet) */
   oublierImage(id) {
+    this._enChargement.delete(id);
     const img = this._images.get(id);
     if (img && img.close) img.close();
     this._images.delete(id);
@@ -119,12 +139,14 @@ const Rendu = {
 
   /* Vide le cache des textes déjà dessinés (libère les petites toiles) */
   _viderCacheTextes() {
-    this._cacheTextes.forEach((e) => { e.toile.width = 0; e.toile.height = 0; });
+    this._cacheTextes.forEach((e) => libererToile(e.toile));
     this._cacheTextes.clear();
   },
 
   /* Libère la mémoire des images et des textes en cache (projet fermé) */
   oublierImages() {
+    this._generation++;
+    this._enChargement.clear();
     this._images.forEach((img) => { if (img.close) img.close(); });
     this._images.clear();
     this._viderCacheTextes();
@@ -337,7 +359,7 @@ const Rendu = {
     if (this._cacheTextes.size > CACHE_TEXTES_MAX) {
       const plusAncienne = this._cacheTextes.keys().next().value;
       const vieille = this._cacheTextes.get(plusAncienne);
-      if (vieille) { vieille.toile.width = 0; vieille.toile.height = 0; }
+      if (vieille) libererToile(vieille.toile);
       this._cacheTextes.delete(plusAncienne);
     }
     return entree;

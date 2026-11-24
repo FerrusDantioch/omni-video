@@ -121,6 +121,7 @@ const Projets = {
     Lecteur.vider();
     PistesAudio.vider();
     this.courant = null;
+    Chronologie.purgerMediasOrphelins(projet);
     Medias.oublierFichiersLegers(projet);
     Rendu.oublierImages();
     Miniature.oublier();
@@ -379,6 +380,7 @@ const Projets = {
       Rendu.oublierImage(id);
       if (Incrustations.edite && !Incrustations.calque(Incrustations.edite)) Incrustations.fermerEditeur();
       await Medias.retirer(projet, id);
+      Chronologie._mediasRetires.add(id);
       this.modifie();
       this.afficherProjet();
       this.rafraichirMontage();
@@ -406,8 +408,8 @@ function carteMedia(m, utilise) {
   else if (!disponible) classes.push('manquant');
 
   const icone = { video: 'i-video', image: 'i-image', audio: 'i-musique' }[m.type];
-  const vignette = m.miniature
-    ? '<img src="' + m.miniature + '" alt="">'
+  const vignette = miniatureValide(m.miniature)
+    ? '<img src="' + proteger(m.miniature) + '" alt="">'
     : '<svg class="icone" aria-hidden="true"><use href="#' + icone + '"/></svg>';
   const duree = m.type !== 'image' && m.duree ? '<span class="media-duree">' + formaterDuree(m.duree) + '</span>' : '';
 

@@ -91,10 +91,22 @@ const Reprise = {
     const dossier = await DisquePrive.dossier();
     if (!dossier) return;
     await dossier.removeEntry(NOM_FICHIER_SON).catch(() => {});
+    if (typeof dossier.entries === 'function') {
+      try {
+        const noms = [];
+        for await (const [nom, poignee] of dossier.entries()) {
+          if (poignee.kind === 'file' && nom.startsWith('omnivideo-partie-')) noms.push(nom);
+        }
+        for (const nom of noms) await dossier.removeEntry(nom).catch(() => {});
+        return;
+      } catch (e) { /* repli ci-dessous */ }
+    }
     const n = etat && Array.isArray(etat.faites) ? etat.faites.length : 0;
+    let manque = 0;
     for (let k = 0; k < Math.max(n, 1000); k++) {
       const ok = await dossier.removeEntry(nomPartie(k)).then(() => true, () => false);
-      if (!ok && k >= n) break;   // plus aucun morceau après
+      if (ok) manque = 0;
+      else if (k >= n && ++manque >= 10) break;
     }
   }
 };
@@ -284,8 +296,11 @@ async function fabriquerSonSeul(projet, segments, total, gain, avertissements, v
       const morceau = new Mediabunny.AudioSample({
         data: donnees, format: 'f32-planar', numberOfChannels: 2, sampleRate: FREQUENCE_SON, timestamp: t
       });
-      await sourceSon.add(morceau);
-      morceau.close();
+      try {
+        await sourceSon.add(morceau);
+      } finally {
+        morceau.close();
+      }
       progres(Math.min(total, seconde + 1) / total);
     }
     await melange.fermer();
@@ -327,7 +342,7 @@ async function fabriquerPartie(projet, segments, total, k, largeur, hauteur, qua
     for (const s of ouvertes.values()) await s.fermer();
     ouvertes.clear();
     cacheEntrees.fermer();
-    cachePhotos.forEach((c) => { c.width = 0; c.height = 0; });
+    cachePhotos.forEach((c) => libererToile(c));
     cachePhotos.clear();
   };
   try {
@@ -348,6 +363,8 @@ async function fabriquerPartie(projet, segments, total, k, largeur, hauteur, qua
     const dossier = await DisquePrive.dossier();
     if (dossier) await dossier.removeEntry(nom).catch(() => {});
     throw erreur;
+  } finally {
+    libererToile(toile);
   }
 }
 
@@ -381,23 +398,31 @@ async function partiesCompatibles(etat, lot) {
   const reference = await reglagesPartie(autre >= 0 ? autre : lot[0]);
   // (lot : les morceaux réussis, déjà notés comme faits)
   let ok = true;
+  const aEffacer = [];
   for (const k of lot) {
     if (memesReglagesVideo(await reglagesPartie(k), reference)) continue;
     ok = false;
     etat.faites[k] = false;
-    const dossier = await DisquePrive.dossier();
-    await dossier.removeEntry(nomPartie(k)).catch(() => {});
+    aEffacer.push(k);
   }
   Reprise.ecrire(etat);
+  if (aEffacer.length) {
+    const dossier = await DisquePrive.dossier();
+    if (dossier) {
+      for (const k of aEffacer) await dossier.removeEntry(nomPartie(k)).catch(() => {});
+    }
+  }
   return ok;
 }
 
 /* Efface les morceaux d'images déjà faits (ils seront refaits) */
 async function effacerParties(etat) {
+  const n = etat.faites.length;
+  for (let k = 0; k < n; k++) etat.faites[k] = false;
+  Reprise.ecrire(etat);
   const dossier = await DisquePrive.dossier();
-  for (let k = 0; k < etat.faites.length; k++) {
-    if (dossier) await dossier.removeEntry(nomPartie(k)).catch(() => {});
-    etat.faites[k] = false;
+  if (dossier) {
+    for (let k = 0; k < n; k++) await dossier.removeEntry(nomPartie(k)).catch(() => {});
   }
 }
 
@@ -407,82 +432,86 @@ async function assemblerParties(projet, nbParties, progres, etat, verifier) {
   const dossier = await DisquePrive.dossier();
   const lire = async (nom) => (await dossier.getFileHandle(nom)).getFile();
   const entreeSon = new Mediabunny.Input({ source: new Mediabunny.BlobSource(await lire(NOM_FICHIER_SON)), formats: Mediabunny.ALL_FORMATS });
-  const pisteSon = await entreeSon.getPrimaryAudioTrack();
-  const reglagesSon = await pisteSon.getDecoderConfig();
-  const paquetsSon = new Mediabunny.EncodedPacketSink(pisteSon).packets();
-
-  const ouvert = await DisquePrive.ouvrirFichier(NOM_FICHIER_EXPORT);
-  if (!ouvert) throw new Error('Disque privé indisponible');
-  const sortie = new Mediabunny.Output({
-    format: new Mediabunny.Mp4OutputFormat({ fastStart: false }),
-    target: new Mediabunny.StreamTarget(ouvert.flux, { chunked: true, chunkSize: 8 * 1024 * 1024 })
-  });
-  const images = new Mediabunny.EncodedVideoPacketSource('avc');
-  const son = new Mediabunny.EncodedAudioPacketSource('aac');
-  sortie.addVideoTrack(images, { frameRate: IMAGES_PAR_SECONDE });
-  sortie.addAudioTrack(son);
-  sortie.setMetadataTags({ title: projet.nom });
-
-  let paquetSon = (await paquetsSon.next()).value || null;
-  let premierSon = true;
-  // Le son avance avec les images (le fichier final reste bien mélangé)
-  const sonJusqua = async (t) => {
-    while (paquetSon && paquetSon.timestamp < t) {
-      await son.add(paquetSon, premierSon ? { decoderConfig: reglagesSon } : undefined);
-      premierSon = false;
-      paquetSon = (await paquetsSon.next()).value || null;
-    }
-  };
-
-  let reglagesImages = null;
+  let paquetsSon = null;
   try {
-    await sortie.start();
-    for (let k = 0; k < nbParties; k++) {
-      if (verifier) verifier();
-      const entree = new Mediabunny.Input({ source: new Mediabunny.BlobSource(await lire(nomPartie(k))), formats: Mediabunny.ALL_FORMATS });
-      try {
-        const piste = await entree.getPrimaryVideoTrack();
-        const reglages = await piste.getDecoderConfig();
-        const premier = !reglagesImages;
-        if (premier) reglagesImages = reglages;
-        else if (!memesReglagesVideo(reglages, reglagesImages)) {
-          const e = new Error('Morceaux incompatibles');
-          e.name = 'MorceauxIncompatibles';
-          throw e;
-        }
-        const decalage = Math.round(k * DUREE_PARTIE * IMAGES_PAR_SECONDE) / IMAGES_PAR_SECONDE;
-        let debutMorceau = premier;
-        for await (const paquet of new Mediabunny.EncodedPacketSink(piste).packets()) {
-          if (verifier) verifier();
-          const t = paquet.timestamp + decalage;
-          await sonJusqua(t);
-          await images.add(paquet.clone({ timestamp: t }), debutMorceau ? { decoderConfig: reglages } : undefined);
-          debutMorceau = false;
-        }
-      } finally {
-        entree.dispose();
+    const pisteSon = await entreeSon.getPrimaryAudioTrack();
+    const reglagesSon = await pisteSon.getDecoderConfig();
+    paquetsSon = new Mediabunny.EncodedPacketSink(pisteSon).packets();
+
+    const ouvert = await DisquePrive.ouvrirFichier(NOM_FICHIER_EXPORT);
+    if (!ouvert) throw new Error('Disque privé indisponible');
+    const sortie = new Mediabunny.Output({
+      format: new Mediabunny.Mp4OutputFormat({ fastStart: false }),
+      target: new Mediabunny.StreamTarget(ouvert.flux, { chunked: true, chunkSize: 8 * 1024 * 1024 })
+    });
+    const images = new Mediabunny.EncodedVideoPacketSource('avc');
+    const son = new Mediabunny.EncodedAudioPacketSource('aac');
+    sortie.addVideoTrack(images, { frameRate: IMAGES_PAR_SECONDE });
+    sortie.addAudioTrack(son);
+    sortie.setMetadataTags({ title: projet.nom });
+
+    let paquetSon = (await paquetsSon.next()).value || null;
+    let premierSon = true;
+    // Le son avance avec les images (le fichier final reste bien mélangé)
+    const sonJusqua = async (t) => {
+      while (paquetSon && paquetSon.timestamp < t) {
+        await son.add(paquetSon, premierSon ? { decoderConfig: reglagesSon } : undefined);
+        premierSon = false;
+        paquetSon = (await paquetsSon.next()).value || null;
       }
-      // Ce morceau est recopié : sa place est libérée
-      await dossier.removeEntry(nomPartie(k)).catch(() => {});
-      etat.faites[k] = false;
-      Reprise.ecrire(etat);
-      progres((k + 1) / nbParties);
+    };
+
+    let reglagesImages = null;
+    try {
+      await sortie.start();
+      for (let k = 0; k < nbParties; k++) {
+        if (verifier) verifier();
+        const entree = new Mediabunny.Input({ source: new Mediabunny.BlobSource(await lire(nomPartie(k))), formats: Mediabunny.ALL_FORMATS });
+        try {
+          const piste = await entree.getPrimaryVideoTrack();
+          const reglages = await piste.getDecoderConfig();
+          const premier = !reglagesImages;
+          if (premier) reglagesImages = reglages;
+          else if (!memesReglagesVideo(reglages, reglagesImages)) {
+            const e = new Error('Morceaux incompatibles');
+            e.name = 'MorceauxIncompatibles';
+            throw e;
+          }
+          const decalage = Math.round(k * DUREE_PARTIE * IMAGES_PAR_SECONDE) / IMAGES_PAR_SECONDE;
+          let debutMorceau = premier;
+          for await (const paquet of new Mediabunny.EncodedPacketSink(piste).packets()) {
+            if (verifier) verifier();
+            const t = paquet.timestamp + decalage;
+            await sonJusqua(t);
+            await images.add(paquet.clone({ timestamp: t }), debutMorceau ? { decoderConfig: reglages } : undefined);
+            debutMorceau = false;
+          }
+        } finally {
+          entree.dispose();
+        }
+        // Ce morceau est recopié : sa place est libérée (état persisté avant suppression)
+        etat.faites[k] = false;
+        Reprise.ecrire(etat);
+        await dossier.removeEntry(nomPartie(k)).catch(() => {});
+        progres((k + 1) / nbParties);
+      }
+      await sonJusqua(Infinity);
+      await sortie.finalize();
+    } catch (erreur) {
+      if (sortie.state !== 'finalized' && sortie.state !== 'canceled') await sortie.cancel().catch(() => {});
+      await ouvert.flux.abort().catch(() => {});
+      await DisquePrive.effacer();
+      if (erreur && erreur.name === 'MorceauxIncompatibles') {
+        // Cette tablette fabrique des morceaux qui ne se recollent pas : la
+        // prochaine fois, tout sera fait d'un coup (sans reprise possible)
+        ecrireReglage(CLE_SANS_PARTIES, 'oui');
+        await Reprise.effacer();
+      }
+      throw erreur;
     }
-    await sonJusqua(Infinity);
+    return ouvert.poignee.getFile();
+  } finally {
+    try { if (paquetsSon && paquetsSon.return) await paquetsSon.return(); } catch (e) { /* déjà fermé */ }
     entreeSon.dispose();
-    await sortie.finalize();
-  } catch (erreur) {
-    entreeSon.dispose();
-    if (sortie.state !== 'finalized' && sortie.state !== 'canceled') await sortie.cancel().catch(() => {});
-    await ouvert.flux.abort().catch(() => {});
-    await DisquePrive.effacer();
-    if (erreur && erreur.name === 'MorceauxIncompatibles') {
-      // Cette tablette fabrique des morceaux qui ne se recollent pas : la
-      // prochaine fois, tout sera fait d'un coup (sans reprise possible)
-      ecrireReglage(CLE_SANS_PARTIES, 'oui');
-      await Reprise.effacer();
-    }
-    throw erreur;
   }
-  return ouvert.poignee.getFile();
 }

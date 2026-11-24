@@ -8,6 +8,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; font-src 'self'; connect-src 'self' blob:; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
 <title>Omni-Vidéo</title>
 <meta name="description" content="Omni-Vidéo — le montage vidéo tout simple pour YouTube, sur tablette. Gratuit, fonctionne hors ligne.">
 <meta name="theme-color" content="#14111d">
@@ -50,7 +51,7 @@
 
 <!-- Petites icônes dessinées une seule fois, réutilisées partout avec <use>.
      Elles sont toujours accompagnées d'un texte. -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<svg width="0" height="0" class="sprite-icones" aria-hidden="true">
   <defs>
     <symbol id="i-video" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-3v10l-6-3"/></g></symbol>
     <symbol id="i-image" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5-9 8"/></g></symbol>
@@ -872,7 +873,7 @@
        application par adresse de site, et toutes les applications de
        ferrusdantioch.github.io partagent la même. Masquée une fois
        l'application installée (règle .note-installation de la feuille de style). -->
-  <p class="note-installation" style="margin-top:18px"><small><strong>Installation sur Android&nbsp;:</strong> si Chrome indique «&nbsp;Cette appli est déjà installée&nbsp;» alors qu'elle ne l'est pas, c'est une limite de Chrome quand une autre application de ce site est déjà installée. Utilise un autre navigateur (Brave, par exemple), ou choisis «&nbsp;Créer un raccourci&nbsp;».</small></p>
+  <p class="note-installation"><small><strong>Installation sur Android&nbsp;:</strong> si Chrome indique «&nbsp;Cette appli est déjà installée&nbsp;» alors qu'elle ne l'est pas, c'est une limite de Chrome quand une autre application de ce site est déjà installée. Utilise un autre navigateur (Brave, par exemple), ou choisis «&nbsp;Créer un raccourci&nbsp;».</small></p>
 
   <p class="signature">Réalisé par Ferrus Dantioch</p>
 </section>
@@ -1236,13 +1237,6 @@
      navigateur est trop ancien pour elle : on l'explique gentiment au lieu
      de laisser un écran vide. (Ce petit script est écrit à l'ancienne
      exprès, pour fonctionner même sur un très vieux navigateur.) -->
-<script>
-setTimeout(function () {
-  if (document.body.getAttribute('data-pret') === 'oui') return;
-  var p = document.getElementById('chargement');
-  if (p) p.innerHTML = 'Omni-Vidéo n\'arrive pas à démarrer sur ce navigateur.<br>' +
-    'Ouvre-la avec <strong>Google Chrome</strong>, mis à jour depuis le Play Store.';
-}, 8000);
-</script>
+<script src="./compat.js"></script>
 </body>
 </html>

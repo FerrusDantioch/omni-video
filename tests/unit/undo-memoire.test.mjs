@@ -131,11 +131,36 @@ test('SousTitres.decaler() ignore les no-op avant _memoriser et réinitialise _d
   assert.equal(lireSymbole(ctx, 'Projets.courant.sousTitres[0].debut'), 1);
 });
 
+test('SousTitres.decaler() crée une nouvelle étape Annuler quand le sens de décalage s inverse (< 4s)', () => {
+  const ctx = preparerContexteUndo();
+  lireSymbole(ctx, `(() => {
+    const p = nettoyerProjet({
+      id: 'p1', nom: 'P',
+      sousTitres: [{ id: 's1', debut: 1.5, duree: 2, texte: 'Salut' }]
+    });
+    Projets.courant = p;
+    Chronologie.ouvrir(p);
+    SousTitres.decaler(-1); // 1.5 -> 0.5 (étape 1 : 1.5)
+    SousTitres.decaler(-1); // 0.5 -> 0 (même sens < 4s : regroupé)
+    SousTitres.decaler(-1); // no-op à 0
+    SousTitres.decaler(1);  // 0 -> 1 (sens inversé < 4s : étape 2 : 0)
+  })()`);
+  assert.equal(lireSymbole(ctx, 'Chronologie._historique.length'), 2);
+  assert.equal(lireSymbole(ctx, 'Projets.courant.sousTitres[0].debut'), 1);
+
+  lireSymbole(ctx, 'Chronologie.annuler()');
+  assert.equal(lireSymbole(ctx, 'Projets.courant.sousTitres[0].debut'), 0);
+  assert.equal(lireSymbole(ctx, 'SousTitres._dernierSensDecalage'), 0);
+
+  lireSymbole(ctx, 'Chronologie.annuler()');
+  assert.equal(lireSymbole(ctx, 'Projets.courant.sousTitres[0].debut'), 1.5);
+});
+
 test('Rendu.image() ferme l ImageBitmap si oublierImage/oublierImages survient avant résolution', async () => {
   const ctx = preparerContexteUndo();
   let resoudre1, resoudre2;
   let closed1 = false, closed2 = false;
-  let cbAppele = 0;
+  ctx._cbAppele = 0;
 
   ctx.createImageBitmap = (() => {
     let appel = 0;
@@ -158,12 +183,12 @@ test('Rendu.image() ferme l ImageBitmap si oublierImage/oublierImages survient a
   assert.equal(closed1, true);
   assert.equal(lireSymbole(ctx, "Rendu._images.has('m1')"), false);
 
-  lireSymbole(ctx, `Rendu.image({ id: 'm2' }, () => { cbAppele++; }); Rendu.oublierImages();`);
+  lireSymbole(ctx, `Rendu.image({ id: 'm2' }, () => { _cbAppele++; }); Rendu.oublierImages();`);
   resoudre2({ close() { closed2 = true; } });
   await Promise.resolve();
   await Promise.resolve();
   assert.equal(closed2, true);
-  assert.equal(cbAppele, 0);
+  assert.equal(ctx._cbAppele, 0);
   assert.equal(lireSymbole(ctx, "Rendu._images.has('m2')"), false);
 });
 

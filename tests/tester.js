@@ -160,6 +160,8 @@ lancer('Omni-Vidéo', async () => {
 
     // 2. Sous-titres : décaler jusqu'à 0:00, puis no-op ne crée pas d'étape fantôme
     await aller(p, '.onglet[data-onglet="sous-titres"]');
+    await aller(p, '#st-decaler summary');
+    await p.waitForSelector('[data-action="decaler-sous-titres"][data-secondes="-1"]', { timeout: 5000 });
     await aller(p, '[data-action="decaler-sous-titres"][data-secondes="-1"]');
     await aller(p, '[data-action="decaler-sous-titres"][data-secondes="-1"]');
     const histAvant = await p.evaluate(() => Chronologie._historique.length);

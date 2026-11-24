@@ -30,7 +30,7 @@ const EXTENSION_SAUVEGARDE = '.omnivideo';
 const TAILLE_DESC_SAUVEGARDE_MAX = 32 * 1024 * 1024;
 const NB_FICHIERS_SAUVEGARDE_MAX = 1000;
 const TAILLE_FICHIER_SAUVEGARDE_MAX = 256 * 1024 * 1024;
-const REGEX_MIME_SAUVEGARDE = /^(?:image\/(?:png|jpeg|webp|gif)|audio\/[a-z0-9.+-]+)(?:\s*;\s*codecs=[a-z0-9.,+-]+)?$/i;
+const REGEX_MIME_SAUVEGARDE = /^(?:image\/(?:png|jpeg|webp|gif)|audio\/(?![a-z0-9.+-]*(?:\+xml|html))[a-z0-9.+-]+)(?:\s*;\s*codecs=[a-z0-9.,+-]+)?$/i;
 
 const Sauvegarde = {
   /* ---------- Sauvegarder un projet dans un fichier ---------- */
@@ -99,8 +99,8 @@ const Sauvegarde = {
       donnees = null;
     }
     if (!donnees || donnees.format !== 'omnivideo-projet' || donnees.version !== 1 ||
-        !donnees.projet || !Array.isArray(donnees.fichiers) ||
-        donnees.fichiers.length > NB_FICHIERS_SAUVEGARDE_MAX) {
+        !donnees.projet || typeof donnees.projet !== 'object' || Array.isArray(donnees.projet) ||
+        !Array.isArray(donnees.fichiers) || donnees.fichiers.length > NB_FICHIERS_SAUVEGARDE_MAX) {
       pasUneSauvegarde();
       return;
     }

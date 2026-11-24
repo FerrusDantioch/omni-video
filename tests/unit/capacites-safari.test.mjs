@@ -26,33 +26,30 @@ function preparerContexteCapacites(overrides = {}) {
   // Stubs minimaux avant de charger app.js (qui lance demarrer())
   for (const nom of ['Visionneuse', 'Lecteur', 'Chronologie', 'Incrustations', 'PistesAudio',
     'SousTitres', 'Miniature', 'Chapitres', 'Guide', 'IntroFin', 'Blancs', 'Projets']) {
-    ctx[nom] = { initialiser() {}, afficherListe() {}, afficherBandeau() {} };
+    ctx[nom] = { initialiser() {}, afficherListe() {}, afficherBandeau() {}, redessiner() {}, fermer() {}, afficherProjet() {} };
   }
   ctx.Rendu = { chargerPolices: async () => {} };
   ctx.Base.ouvrir = async () => ({});
+  // Isoler demarrer() afin qu'il ne lance pas un Capacites.tester() concurrent en arrière-plan
+  const origTester = ctx.Capacites.tester.bind(ctx.Capacites);
+  ctx.Capacites.tester = async () => null;
   chargerScripts(ctx, ['app.js']);
+  ctx.Capacites.tester = origTester;
   return ctx;
 }
 
 test('encodageH264Soutenu et choisirEncodeur acceptent Main ou Baseline quand High échoue', async () => {
   const ctx = preparerContexteCapacites({
-    VideoDecoder: { isConfigSupported: async () => ({ supported: true }) },
-    VideoEncoder: {
+    VideoDecoder: Object.assign(function () {}, { isConfigSupported: async () => ({ supported: true }) }),
+    VideoEncoder: Object.assign(function () {}, {
       isConfigSupported: async (cfg) => ({
         supported: cfg.codec.startsWith('avc1.4d00') || cfg.codec.startsWith('avc1.42e0')
       })
-    },
-    AudioDecoder: { isConfigSupported: async () => ({ supported: true }) },
-    AudioEncoder: { isConfigSupported: async () => ({ supported: true }) },
+    }),
+    AudioDecoder: Object.assign(function () {}, { isConfigSupported: async () => ({ supported: true }) }),
+    AudioEncoder: Object.assign(function () {}, { isConfigSupported: async () => ({ supported: true }) }),
     VideoFrame: function () {}
   });
-  // Faire en sorte que typeof VideoDecoder/VideoEncoder/VideoFrame soit 'function'
-  lireSymbole(ctx, `
-    VideoDecoder = Object.assign(function () {}, VideoDecoder);
-    VideoEncoder = Object.assign(function () {}, VideoEncoder);
-    AudioDecoder = Object.assign(function () {}, AudioDecoder);
-    AudioEncoder = Object.assign(function () {}, AudioEncoder);
-  `);
 
   const r = await lireSymbole(ctx, 'Capacites.tester()');
   assert.equal(r.peutExporter, true);

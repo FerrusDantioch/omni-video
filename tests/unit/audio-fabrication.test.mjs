@@ -83,6 +83,36 @@ test('SourceSon._charger recharge depuis 0 après fin de lecture et vidage de mo
   assert.ok(sommeApresBoucle > 100, 'La musique bouclée ne doit pas produire de silence');
 });
 
+test('SourceSon._charger ne rouvre pas sink.samples() à chaque seconde sur une piste audio vide', async () => {
+  const ctx = creerContexteAudio();
+  let appelsSamples = 0;
+
+  ctx._emptySamplesFactory = () => {
+    appelsSamples++;
+    return {
+      async next() { return { done: true }; },
+      async return() {}
+    };
+  };
+
+  lireSymbole(ctx, `
+    var srcVide = new SourceSon({ id: 'musVide', type: 'audio', nom: 'vide.mp3' }, new Blob(['x']));
+    srcVide.frequence = 48000;
+    srcVide.sink = { samples: () => _emptySamplesFactory() };
+  `);
+
+  await lireSymbole(ctx, `(async () => {
+    for (let s = 0; s < 5; s++) {
+      const g = new Float32Array(48000);
+      const d = new Float32Array(48000);
+      await srcVide.ajouter(g, d, 0, 48000, s, s, () => 1, 1);
+    }
+  })()`);
+
+  assert.equal(appelsSamples, 1, 'sink.samples ne doit être appelé qu une seule fois sur une piste vide');
+  assert.equal(lireSymbole(ctx, 'srcVide._pisteVide'), true);
+});
+
 test('PistesAudio.baisseSousVoix et indexerVoix évitent find() dans la boucle et respectent la courbe', () => {
   const ctx = creerContexteAudio();
   const res = lireSymbole(ctx, `(() => {

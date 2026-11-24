@@ -251,6 +251,9 @@ class SourceSon {
     this.finCharge = -Infinity;
     this.fini = false;
     this.muet = false;
+    this._aEuMorceau = false;
+    this._pisteVide = false;
+    this._debutLecture = Infinity;
     this._g = new Float32Array(0);
     this._d = new Float32Array(0);
   }
@@ -311,20 +314,31 @@ class SourceSon {
 
   /* Prépare les échantillons de f0 à f1 (numéros dans le fichier) */
   async _charger(f0, f1) {
-    if (!this.sink) return;
+    if (!this.sink || this._pisteVide) return;
     const premier = this.morceaux[0];
     // Retour en arrière (musique qui recommence) ou grand saut : on
     // reprend la lecture à cet endroit
-    if (!this.lecture || (premier ? f0 < premier.debut - 2 : f0 < this.finCharge) || f0 > this.finCharge + this.frequence * 2) {
+    const aReouvrir = !this.lecture ||
+      (premier ? f0 < premier.debut - 2 : f0 < this.finCharge) ||
+      (f0 > this.finCharge + this.frequence * 2 && !(this.fini && !this._aEuMorceau && f0 >= this._debutLecture));
+    if (aReouvrir) {
       if (this.lecture) { try { await this.lecture.return(); } catch (e) { /* déjà fermé */ } }
-      this.lecture = this.sink.samples(Math.max(0, f0 / this.frequence - 0.05));
+      const depart = Math.max(0, f0 / this.frequence - 0.05);
+      this.lecture = this.sink.samples(depart);
       this.morceaux = [];
       this.finCharge = -Infinity;
       this.fini = false;
+      this._aEuMorceau = false;
+      this._debutLecture = depart === 0 ? 0 : f0;
     }
     while (this.finCharge < f1 && !this.fini) {
       const r = await this.lecture.next();
-      if (r.done) { this.fini = true; break; }
+      if (r.done) {
+        this.fini = true;
+        if (!this._aEuMorceau && this._debutLecture === 0) this._pisteVide = true;
+        break;
+      }
+      this._aEuMorceau = true;
       this._ajouterEchantillon(r.value);
     }
     // Les morceaux déjà joués sont oubliés (la mémoire reste petite)
@@ -920,7 +934,7 @@ async function fabriquerVideo(projet, reglages, suivi, arret) {
   const mediasParId = new Map(projet.medias.map((m) => [m.id, m]));
   const viderCaches = () => {
     cacheEntrees.fermer();
-    cachePhotos.forEach((c) => { c.width = 0; c.height = 0; });
+    cachePhotos.forEach((c) => libererToile(c));
     cachePhotos.clear();
   };
 
@@ -1068,7 +1082,7 @@ function photoRedimensionnee(cachePhotos, mediaId, img, l, h) {
   if (cachePhotos.size > 4) {
     const plusAncienne = cachePhotos.keys().next().value;
     const vieille = cachePhotos.get(plusAncienne);
-    if (vieille) { vieille.width = 0; vieille.height = 0; }
+    if (vieille) libererToile(vieille);
     cachePhotos.delete(plusAncienne);
   }
   return c;

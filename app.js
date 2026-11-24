@@ -399,7 +399,7 @@ async function demarrer() {
     });
   }
   // Les polices sont chargées tout de suite (la toile ne les attend pas)
-  Rendu.chargerPolices().then(() => Incrustations.redessiner(true));
+  Rendu.chargerPolices().then(() => Incrustations.redessiner(true)).catch(() => {});
 
   // L'application est prête à s'afficher
   $('#chargement').hidden = true;

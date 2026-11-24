@@ -139,7 +139,7 @@ const Rendu = {
 
   /* Vide le cache des textes déjà dessinés (libère les petites toiles) */
   _viderCacheTextes() {
-    this._cacheTextes.forEach((e) => { e.toile.width = 0; e.toile.height = 0; });
+    this._cacheTextes.forEach((e) => libererToile(e.toile));
     this._cacheTextes.clear();
   },
 
@@ -359,7 +359,7 @@ const Rendu = {
     if (this._cacheTextes.size > CACHE_TEXTES_MAX) {
       const plusAncienne = this._cacheTextes.keys().next().value;
       const vieille = this._cacheTextes.get(plusAncienne);
-      if (vieille) { vieille.toile.width = 0; vieille.toile.height = 0; }
+      if (vieille) libererToile(vieille.toile);
       this._cacheTextes.delete(plusAncienne);
     }
     return entree;

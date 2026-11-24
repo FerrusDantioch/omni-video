@@ -278,6 +278,7 @@ export function creerContexte(overrides = {}) {
     isSecureContext: true,
     location: { hash: '', pathname: '/omni-video/', search: '', reload() {} },
     history: { state: null, pushState() {}, replaceState() {}, back() {} },
+    scrollTo() {},
     CSS: { escape: (s) => String(s).replace(/([^\w-])/g, '\\$1') },
     localStorage: {
       getItem: (k) => (storageData.has(k) ? storageData.get(k) : null),

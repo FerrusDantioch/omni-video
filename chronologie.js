@@ -131,7 +131,7 @@ const Chronologie = {
     this._refaire = [];
     this._mediasUndo.clear();
     this._mediasRetires.clear();
-    if (typeof SousTitres !== 'undefined') SousTitres._dernierDecalage = 0;
+    if (typeof SousTitres !== 'undefined') { SousTitres._dernierDecalage = 0; SousTitres._dernierSensDecalage = 0; }
     if (typeof Chapitres !== 'undefined') Chapitres._titreMemoriseId = null;
     Lecteur.calculer(projet);
     this.pps = this._zoomPourTout(Lecteur.duree());
@@ -580,7 +580,7 @@ const Chronologie = {
      Avant chaque modification, on garde une copie de la liste des clips. */
 
   _memoriser() {
-    if (typeof SousTitres !== 'undefined') SousTitres._dernierDecalage = 0;
+    if (typeof SousTitres !== 'undefined') { SousTitres._dernierDecalage = 0; SousTitres._dernierSensDecalage = 0; }
     this._historique.push(this._photo());
     if (this._historique.length > HISTORIQUE_MAX) this._historique.shift();
     this._refaire = [];
@@ -621,7 +621,7 @@ const Chronologie = {
     projet.chapitres = nettoyerChapitres(donnees.chapitres);
     projet.baisserMusique = donnees.baisserMusique !== false;
     if (typeof Chapitres !== 'undefined') Chapitres._titreMemoriseId = null;
-    if (typeof SousTitres !== 'undefined') SousTitres._dernierDecalage = 0;
+    if (typeof SousTitres !== 'undefined') { SousTitres._dernierDecalage = 0; SousTitres._dernierSensDecalage = 0; }
     this._apresModification(donnees.t);
     if (typeof Chapitres !== 'undefined') Chapitres.afficherListe();
     if (typeof PistesAudio !== 'undefined') { PistesAudio.afficherListes(); PistesAudio.synchroniser(); }

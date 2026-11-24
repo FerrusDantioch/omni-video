@@ -129,7 +129,7 @@ test('Sauvegarde.importer rejette longueurs/tailles invalides et nettoie en cas 
   assert.equal(supprimes.length, 1, 'Le blob écrit avant l erreur doit être supprimé (rollback)');
   assert.equal(fichiersDb.size, 0);
 
-  // 5. Type MIME dangereux (text/html) assaini en chaîne vide sur import réussi
+  // 5. Type MIME dangereux (text/html) ou audio/svg+xml assaini en chaîne vide sur import réussi
   lireSymbole(ctx, `
     Base.enregistrerProjet = async (p) => { _testHooks.projetsDb.set(p.id, p); };
   `);
@@ -143,6 +143,31 @@ test('Sauvegarde.importer rejette longueurs/tailles invalides et nettoie en cas 
   assert.equal(projetsDb.size, 1);
   const blobStocke = Array.from(fichiersDb.values())[0];
   assert.notEqual(blobStocke.type, 'text/html');
+
+  ctx._fTest = construireOmnivideo({
+    format: 'omnivideo-projet',
+    version: 1,
+    projet: { id: 'p3', nom: 'Son sain', medias: [{ id: 'm1', type: 'audio', nom: 'a.mp3' }] },
+    fichiers: [{ id: 'm1', taille: 4, type: 'audio/svg+xml' }]
+  }, [payload]);
+  await lireSymbole(ctx, `Sauvegarde.importer(_fTest)`);
+  assert.equal(projetsDb.size, 2);
+  const blobAudioSvg = Array.from(fichiersDb.values())[1];
+  assert.equal(blobAudioSvg.type, '');
+
+  // 6. donnees.projet primitif (true) ou tableau ([]) rejeté proprement sans TypeError
+  const { messages } = ctx._testHooks;
+  for (const mauvaisProjet of [true, []]) {
+    ctx._fTest = construireOmnivideo({
+      format: 'omnivideo-projet',
+      version: 1,
+      projet: mauvaisProjet,
+      fichiers: []
+    });
+    await lireSymbole(ctx, `Sauvegarde.importer(_fTest)`);
+    assert.match(messages[messages.length - 1].t, /pas une sauvegarde/);
+  }
+  assert.equal(projetsDb.size, 2);
 });
 
 test('rendu UI : aucune injection XSS ni style= et CSS.escape sur les IDs chapitres', () => {

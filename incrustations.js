@@ -63,12 +63,34 @@ const Incrustations = {
 
   initialiser() {
     // Les choix de l'éditeur, fabriqués une fois pour toutes
-    $('#ed-polices').innerHTML = Object.entries(POLICES).map(([cle, p]) =>
-      '<button type="button" class="bouton choix-police" data-action="calque-police" data-police="' + cle + '" ' +
-      'style="font-family:' + p.famille.replace(/"/g, '&quot;') + '">' + p.libelle + '</button>').join('');
-    $('#ed-couleurs').innerHTML = COULEURS_TEXTE.map((c) =>
-      '<button type="button" class="pastille-couleur" data-action="calque-couleur" data-couleur="' + c.valeur + '" ' +
-      'style="--couleur:' + c.valeur + '" aria-label="' + c.nom + '"><span>' + c.nom + '</span></button>').join('');
+    const fragPolices = document.createDocumentFragment();
+    for (const [cle, p] of Object.entries(POLICES)) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'bouton choix-police';
+      btn.dataset.action = 'calque-police';
+      btn.dataset.police = cle;
+      btn.style.fontFamily = p.famille;
+      btn.textContent = p.libelle;
+      fragPolices.appendChild(btn);
+    }
+    $('#ed-polices').replaceChildren(fragPolices);
+
+    const fragCouleurs = document.createDocumentFragment();
+    for (const c of COULEURS_TEXTE) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pastille-couleur';
+      btn.dataset.action = 'calque-couleur';
+      btn.dataset.couleur = c.valeur;
+      btn.style.setProperty('--couleur', c.valeur);
+      btn.setAttribute('aria-label', c.nom);
+      const span = document.createElement('span');
+      span.textContent = c.nom;
+      btn.appendChild(span);
+      fragCouleurs.appendChild(btn);
+    }
+    $('#ed-couleurs').replaceChildren(fragCouleurs);
     $('#ed-styles').innerHTML = Object.entries(NOMS_STYLES).map(([cle, nom]) =>
       '<button type="button" class="bouton" data-action="calque-style" data-style="' + cle + '">' + nom + '</button>').join('');
     $('#ed-places').innerHTML = PLACES.map((p) =>
@@ -364,7 +386,7 @@ const Incrustations = {
     const c = this.calque(this.edite);
     if (!c) return;
     if (Lecteur.t <= c.debut + DUREE_CALQUE_MIN) {
-      Message.probleme('Place d\'abord la ligne violette APRÈS le début du ' + (c.type === 'texte' ? 'texte' : 'l\'image') + ', puis touche à nouveau « Finit à la ligne ».');
+      Message.probleme('Place d\'abord la ligne violette APRÈS le début ' + (c.type === 'texte' ? 'du texte' : 'de l\'image') + ', puis touche à nouveau « Finit à la ligne ».');
       return;
     }
     this.changer('duree', Lecteur.t - c.debut);
@@ -416,20 +438,44 @@ const Incrustations = {
     const moment = (c) => 'De ' + formaterDuree(c.debut) + ' à ' + formaterDuree(c.debut + c.duree);
 
     const textes = projet.calques.filter((c) => c.type === 'texte').sort(parDebut);
-    $('#liste-textes').innerHTML = textes.map((c) =>
-      '<li class="carte-calque">' +
-        '<p class="calque-apercu" style="font-family:' + (POLICES[c.police] || POLICES.oxanium).famille.replace(/"/g, '&quot;') + '">' + proteger(c.texte.trim() || '(texte vide)') + '</p>' +
-        '<p class="aide">' + moment(c) + '</p>' +
-        '<button type="button" class="bouton" data-action="editer-calque" data-id="' + proteger(c.id) + '">' +
-          '<svg class="icone" aria-hidden="true"><use href="#i-crayon"/></svg>Modifier</button>' +
-      '</li>').join('');
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const fragTextes = document.createDocumentFragment();
+    for (const c of textes) {
+      const li = document.createElement('li');
+      li.className = 'carte-calque';
+      const apercu = document.createElement('p');
+      apercu.className = 'calque-apercu';
+      apercu.style.fontFamily = (POLICES[c.police] || POLICES.oxanium).famille;
+      apercu.textContent = c.texte.trim() || '(texte vide)';
+      const aide = document.createElement('p');
+      aide.className = 'aide';
+      aide.textContent = moment(c);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'bouton';
+      btn.dataset.action = 'editer-calque';
+      btn.dataset.id = c.id;
+      const svg = document.createElementNS(SVG_NS, 'svg');
+      svg.setAttribute('class', 'icone');
+      svg.setAttribute('aria-hidden', 'true');
+      const use = document.createElementNS(SVG_NS, 'use');
+      use.setAttribute('href', '#i-crayon');
+      svg.appendChild(use);
+      btn.appendChild(svg);
+      btn.appendChild(document.createTextNode('Modifier'));
+      li.appendChild(apercu);
+      li.appendChild(aide);
+      li.appendChild(btn);
+      fragTextes.appendChild(li);
+    }
+    $('#liste-textes').replaceChildren(fragTextes);
     $('#textes-vide').hidden = textes.length > 0;
 
     const images = projet.calques.filter((c) => c.type === 'image').sort(parDebut);
     $('#liste-incrustations').innerHTML = images.map((c) => {
       const media = projet.medias.find((m) => m.id === c.mediaId);
       return '<li class="carte-calque carte-calque-image">' +
-        (media && media.miniature ? '<img src="' + media.miniature + '" alt="">' : '') +
+        (media && miniatureValide(media.miniature) ? '<img src="' + proteger(media.miniature) + '" alt="">' : '') +
         '<div><p class="media-nom">' + proteger(media ? media.nom : 'Image') + '</p>' +
         '<p class="aide">' + moment(c) + '</p></div>' +
         '<button type="button" class="bouton" data-action="editer-calque" data-id="' + proteger(c.id) + '">' +
@@ -449,7 +495,8 @@ const Incrustations = {
     if (zone.hidden) return;
     $('#choix-incrustation-liste').innerHTML = images.map((m) =>
       '<button type="button" class="choix-image" data-action="incruster-image" data-id="' + proteger(m.id) + '">' +
-        '<img src="' + m.miniature + '" alt=""><span>' + proteger(m.nom) + '</span></button>').join('');
+        (miniatureValide(m.miniature) ? '<img src="' + proteger(m.miniature) + '" alt="">' : '') +
+        '<span>' + proteger(m.nom) + '</span></button>').join('');
     $('#choix-incrustation-vide').hidden = images.length > 0;
   }
 };

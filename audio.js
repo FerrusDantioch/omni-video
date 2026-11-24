@@ -88,9 +88,26 @@ const PistesAudio = {
     return piste.duree;
   },
 
+  /* Pré-indexe les plages de voix off pour éviter de parcourir projet.medias
+     des centaines de fois par seconde pendant le mélange audio. */
+  indexerVoix(projet, dureeMontage) {
+    if (!projet || !projet.baisserMusique) return [];
+    const medias = new Map(projet.medias.map((m) => [m.id, m]));
+    const voix = [];
+    for (const p of projet.pistes) {
+      if (p.type !== 'voix') continue;
+      const media = medias.get(p.mediaId);
+      // La voix s'arrête à la fin de son enregistrement, même si sa place est plus longue
+      let fin = p.debut + this.duree(p, dureeMontage);
+      if (media && media.duree > 0) fin = Math.min(fin, p.debut + media.duree);
+      voix.push({ debut: p.debut, fin });
+    }
+    return voix;
+  },
+
   /* Le volume d'une piste à l'instant t, fondus compris (0 à 1).
      Sert à l'aperçu ET à la vidéo finale (fabrication.js). */
-  volumeA(piste, t, dureeMontage, projetDonne) {
+  volumeA(piste, t, dureeMontage, projetDonne, voixIndexees) {
     const duree = this.duree(piste, dureeMontage);
     const f = FONDUS_PISTE[piste.type];
     const depuis = t - piste.debut;
@@ -98,24 +115,21 @@ const PistesAudio = {
     let v = piste.volume;
     if (depuis < f.entree) v *= borner(depuis / f.entree, 0, 1);
     if (reste < f.sortie) v *= borner(reste / f.sortie, 0, 1);
-    if (piste.type === 'musique') v *= this.baisseSousVoix(projetDonne || Projets.courant, t, dureeMontage);
+    if (piste.type === 'musique') v *= this.baisseSousVoix(projetDonne || Projets.courant, t, dureeMontage, voixIndexees);
     return v;
   },
 
   /* 1 = musique à son volume normal ; MUSIQUE_SOUS_VOIX = une voix parle */
-  baisseSousVoix(projet, t, dureeMontage) {
+  baisseSousVoix(projet, t, dureeMontage, voixIndexees) {
     if (!projet || !projet.baisserMusique) return 1;
+    const listeVoix = voixIndexees || this.indexerVoix(projet, dureeMontage);
     let presence = 0;   // 0 = aucune voix, 1 = une voix parle
-    for (const voix of projet.pistes) {
-      if (voix.type !== 'voix') continue;
-      const media = projet.medias.find((m) => m.id === voix.mediaId);
-      // La voix s'arrête à la fin de son enregistrement, même si sa place est plus longue
-      let fin = voix.debut + this.duree(voix, dureeMontage);
-      if (media && media.duree > 0) fin = Math.min(fin, voix.debut + media.duree);
+    for (let i = 0; i < listeVoix.length; i++) {
+      const voix = listeVoix[i];
       let p = 0;
-      if (t >= voix.debut && t < fin) p = 1;
+      if (t >= voix.debut && t < voix.fin) p = 1;
       else if (t < voix.debut) p = 1 - (voix.debut - t) / BAISSE_AVANT_VOIX;
-      else p = 1 - (t - fin) / REMONTEE_APRES_VOIX;
+      else p = 1 - (t - voix.fin) / REMONTEE_APRES_VOIX;
       presence = Math.max(presence, borner(p, 0, 1));
       if (presence >= 1) break;
     }
@@ -490,6 +504,7 @@ const Enregistreur = {
     }
     Medias.fichiers.set(media.id, blob);
     Chronologie._memoriser();
+    if (Chronologie._mediasUndo) Chronologie._mediasUndo.set(media.id, media);
     projet.medias.push(media);
     projet.pistes.push(nettoyerPiste({
       id: nouvelId(), type: 'voix', mediaId: media.id, debut: this._debutMontage, duree, volume: 1

@@ -78,6 +78,7 @@ const TELEPHONE = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2,
 let navigateur, serveur, adresse;
 const externes = [];         // requêtes vers un autre site
 const erreurs = [];          // erreurs JavaScript
+const violationsCsp = [];    // violations CSP détectées dans la page
 
 /* « avant » : ce qu'il faut préparer avant d'ouvrir la page (faux site, etc.). */
 async function nouvellePage({ avant, ...options } = {}) {
@@ -88,10 +89,26 @@ async function nouvellePage({ avant, ...options } = {}) {
     if (!/^(http:\/\/localhost:|blob:|data:)/.test(u)) externes.push(u);
   });
   const p = await ctx.newPage();
+  await p.addInitScript(() => {
+    window.__cspViolations = [];
+    document.addEventListener('securitypolicyviolation', (e) => {
+      window.__cspViolations.push({ directive: e.violatedDirective, blocked: e.blockedURI });
+    });
+  });
   p.on('pageerror', (e) => erreurs.push(e.message));
   p.on('console', (m) => { if (m.type() === 'error') erreurs.push(m.text()); });
   await p.goto(adresse);
   return { ctx, p };
+}
+
+async function verifierCsp(p) {
+  try {
+    const liste = await p.evaluate(() => window.__cspViolations || []);
+    violationsCsp.push(...liste);
+    return liste;
+  } catch (e) {
+    return [];
+  }
 }
 
 /* Fichiers cités dans le service worker (« ./qqch.ext » ou « dossier/qqch.ext ») :
@@ -128,6 +145,21 @@ async function controlesCommuns({ serviceWorker, avant }) {
     const manquants = liste.filter((f) => !fs.existsSync(path.join(RACINE, f)));
     verifier(liste.length > 0, `${serviceWorker} cite ${liste.length} fichiers`);
     verifier(manquants.length === 0, 'chacun existe vraiment', manquants);
+
+    const html = fs.readFileSync(path.join(RACINE, 'index.html'), 'utf8');
+    const css = fs.readFileSync(path.join(RACINE, 'styles.css'), 'utf8');
+    const manifest = JSON.parse(fs.readFileSync(path.join(RACINE, 'manifest.json'), 'utf8'));
+    const ensembleSw = new Set(liste.map((f) => f.replace(/^\.\//, '')));
+    const refs = [
+      ...[...html.matchAll(/<(?:link|script|img)\b[^>]*\b(?:src|href)="([^"#:]+)"/gi)].map((m) => m[1]),
+      ...[...css.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/g)].map((m) => m[1]),
+      manifest.start_url,
+      ...(manifest.icons || []).map((ic) => ic.src)
+    ].filter(Boolean).map((f) => f.replace(/^\.\//, ''));
+    const absentsSw = [...new Set(refs)].filter((f) => !ensembleSw.has(f));
+    verifier(absentsSw.length === 0, 'réciprocité HTML/CSS/manifeste → ' + serviceWorker, absentsSw);
+    verifier(fs.existsSync(path.join(RACINE, '.nojekyll')), '.nojekyll présent');
+    verifier(/<meta\s+http-equiv="Content-Security-Policy"/i.test(html), 'CSP présente dans index.html');
   });
 
   await section('Ouverture sur un téléphone', async () => {
@@ -157,6 +189,7 @@ async function controlesCommuns({ serviceWorker, avant }) {
       horsLigne = await mesurer(p, () => document.body.innerText.trim().length);
     } catch (e) { /* page introuvable hors ligne */ }
     verifier(horsLigne > 20, 'l’application se rouvre sans internet');
+    await verifierCsp(p);
     await ctx.close();
   });
 }
@@ -179,6 +212,7 @@ async function lancer(nom, fn, { autorises = [], argsNavigateur = [] } = {}) {
       const autres = externes.filter((u) => !autorises.some((a) => u.startsWith(a)));
       verifier(autres.length === 0, 'aucun autre site contacté', [...new Set(autres)].slice(0, 5));
       verifier(erreurs.length === 0, 'aucune erreur JavaScript', [...new Set(erreurs)].slice(0, 5));
+      verifier(violationsCsp.length === 0, 'zéro violation CSP', violationsCsp.slice(0, 5));
     });
     await navigateur.close();
     serveur.close();
@@ -190,4 +224,4 @@ async function lancer(nom, fn, { autorises = [], argsNavigateur = [] } = {}) {
   process.exit(echecs.length ? 1 : 0);
 }
 
-module.exports = { lancer, section, verifier, nouvellePage, controlesCommuns, RACINE, DOSSIER, erreurs, externes, adresse: () => adresse };
+module.exports = { lancer, section, verifier, verifierCsp, nouvellePage, controlesCommuns, RACINE, DOSSIER, erreurs, externes, violationsCsp, adresse: () => adresse };

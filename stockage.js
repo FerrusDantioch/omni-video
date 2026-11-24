@@ -138,6 +138,11 @@ const Base = {
 const FORMATS = ['16:9', '9:16'];
 const AJUSTEMENTS = ['contenir', 'remplir'];
 const TYPES_MEDIA = ['video', 'image', 'audio'];
+const ID_LONGUEUR_MAX = 100;
+
+function idValide(v) {
+  return typeof v === 'string' && v.length > 0 && v.length <= ID_LONGUEUR_MAX;
+}
 
 function nouveauProjet(nom, format) {
   const maintenant = Date.now();
@@ -151,9 +156,9 @@ function nouveauProjet(nom, format) {
 }
 
 function nettoyerProjet(brut) {
-  if (!brut || typeof brut !== 'object' || typeof brut.id !== 'string') return null;
+  if (!brut || typeof brut !== 'object' || !idValide(brut.id)) return null;
   const texte = (v, defaut) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 200) : defaut);
-  const nombre = (v, defaut) => (Number.isFinite(v) ? v : defaut);
+  const horodatage = (v, defaut) => (Number.isFinite(v) && v >= 0 ? v : defaut);
   const medias = Array.isArray(brut.medias) ? brut.medias.map(nettoyerMedia).filter(Boolean) : [];
   // Un clip dont le fichier a disparu du projet est oublié
   const clips = Array.isArray(brut.clips)
@@ -165,8 +170,8 @@ function nettoyerProjet(brut) {
     nom: texte(brut.nom, 'Projet sans nom'),
     format: FORMATS.includes(brut.format) ? brut.format : '16:9',
     ajustement: AJUSTEMENTS.includes(brut.ajustement) ? brut.ajustement : 'contenir',
-    cree: nombre(brut.cree, Date.now()),
-    modifie: nombre(brut.modifie, Date.now()),
+    cree: horodatage(brut.cree, Date.now()),
+    modifie: horodatage(brut.modifie, Date.now()),
     medias,
     clips,
     calques: Array.isArray(brut.calques)
@@ -214,7 +219,7 @@ function nettoyerChapitres(liste) {
   if (!Array.isArray(liste)) return [];
   const vus = new Set();
   return liste
-    .filter((c) => c && typeof c.id === 'string' && Number.isFinite(c.t))
+    .filter((c) => c && idValide(c.id) && Number.isFinite(c.t))
     .map((c) => ({
       id: c.id,
       t: Math.max(0, Math.min(DUREE_CALQUE_MAX, Math.round(c.t))),
@@ -233,7 +238,7 @@ const SOUS_TITRES_MAX = 5000;
 const DUREE_SOUS_TITRE_MIN = 0.2;
 
 function nettoyerSousTitre(brut) {
-  if (!brut || typeof brut !== 'object' || typeof brut.id !== 'string') return null;
+  if (!brut || typeof brut !== 'object' || !idValide(brut.id)) return null;
   const nombre = (v, defaut, min, max) => borner(Number.isFinite(v) ? v : defaut, min, max);
   return {
     id: brut.id,
@@ -289,7 +294,7 @@ const DUREE_CALQUE_MIN = 0.3;
 const DUREE_CALQUE_MAX = 3 * 3600;
 
 function nettoyerCalque(brut, medias) {
-  if (!brut || typeof brut !== 'object' || typeof brut.id !== 'string') return null;
+  if (!brut || typeof brut !== 'object' || !idValide(brut.id)) return null;
   if (brut.type !== 'texte' && brut.type !== 'image') return null;
   const nombre = (v, defaut, min, max) => borner(Number.isFinite(v) ? v : defaut, min, max);
   const commun = {
@@ -343,7 +348,7 @@ function reglageImage(v, min, max) {
 const VITESSES_CLIP = [0.5, 0.75, 1, 1.5, 2];
 
 function nettoyerClip(brut, medias) {
-  if (!brut || typeof brut !== 'object' || typeof brut.id !== 'string') return null;
+  if (!brut || typeof brut !== 'object' || !idValide(brut.id)) return null;
   const media = medias.find((m) => m.id === brut.mediaId);
   if (!media || media.type === 'audio') return null;
   const limite = media.type === 'video' && media.duree > 0 ? media.duree : DUREE_IMAGE_MAX;
@@ -400,7 +405,7 @@ const TYPES_PISTE = ['musique', 'voix'];
 const VOLUME_MUSIQUE_DEFAUT = 0.3;   // une musique de fond reste discrète
 
 function nettoyerPiste(brut, medias) {
-  if (!brut || typeof brut !== 'object' || typeof brut.id !== 'string') return null;
+  if (!brut || typeof brut !== 'object' || !idValide(brut.id)) return null;
   if (!TYPES_PISTE.includes(brut.type)) return null;
   const media = medias.find((m) => m.id === brut.mediaId && m.type === 'audio');
   if (!media) return null;
@@ -418,22 +423,22 @@ function nettoyerPiste(brut, medias) {
 
 /* Un fichier du projet (vidéo, image ou musique) */
 function nettoyerMedia(brut) {
-  if (!brut || typeof brut !== 'object' || typeof brut.id !== 'string') return null;
+  if (!brut || typeof brut !== 'object' || !idValide(brut.id)) return null;
   if (!TYPES_MEDIA.includes(brut.type)) return null;
-  const nombre = (v, defaut) => (Number.isFinite(v) ? v : defaut);
+  const borne = (v, max) => (Number.isFinite(v) && v >= 0 ? Math.min(max, v) : 0);
   return {
     id: brut.id,
     type: brut.type,
     nom: typeof brut.nom === 'string' ? brut.nom.slice(0, 300) : 'Fichier',
-    taille: nombre(brut.taille, 0),            // en octets : sert à reconnaître la vidéo
-    dateFichier: nombre(brut.dateFichier, 0),  // date de dernière modification du fichier
-    duree: nombre(brut.duree, 0),              // en secondes (0 pour une image)
-    largeur: nombre(brut.largeur, 0),          // telle qu'on la voit (rotation comprise)
-    hauteur: nombre(brut.hauteur, 0),
-    aSon: !!brut.aSon,                         // la vidéo contient-elle du son ?
-    miniature: typeof brut.miniature === 'string' && brut.miniature.startsWith('data:image/') ? brut.miniature : '',
-    probleme: typeof brut.probleme === 'string' ? brut.probleme : '',  // texte si le fichier est illisible
-    voix: brut.type === 'audio' && !!brut.voix   // une voix off enregistrée au micro (pas dans « Mes fichiers »)
+    taille: borne(brut.taille, 1e13),               // en octets : sert à reconnaître la vidéo
+    dateFichier: borne(brut.dateFichier, 1e15),     // date de dernière modification du fichier
+    duree: borne(brut.duree, DUREE_CALQUE_MAX * 10),// en secondes (0 pour une image)
+    largeur: borne(brut.largeur, 16384),            // telle qu'on la voit (rotation comprise)
+    hauteur: borne(brut.hauteur, 16384),
+    aSon: !!brut.aSon,                              // la vidéo contient-elle du son ?
+    miniature: miniatureValide(brut.miniature) ? brut.miniature : '',
+    probleme: typeof brut.probleme === 'string' ? brut.probleme.slice(0, 300) : '',  // texte si le fichier est illisible
+    voix: brut.type === 'audio' && !!brut.voix      // une voix off enregistrée au micro (pas dans « Mes fichiers »)
   };
 }
 

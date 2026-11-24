@@ -1,0 +1,31 @@
+name: CI Omni-Vidéo
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Contrôles statiques (CSP, SW réciproque, hygiène) et tests unitaires Node
+        run: node --test tests/verifier-statique.test.mjs tests/unit/*.test.mjs
+
+      - name: Installer Playwright (sans modifier package.json)
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Tests E2E navigateur (Playwright)
+        run: node tests/tester.js
+
+      - name: Vérifier qu'aucun fichier parasite n'est suivi par git
+        run: git status --porcelain

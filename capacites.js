@@ -73,8 +73,8 @@ const Capacites = {
     }
 
     // 4. WebCodecs : la boîte à outils vidéo moderne du navigateur
+    // (AudioEncoder est facultatif : Safari utilise encodeur-aac.wasm)
     const webcodecs = typeof VideoDecoder === 'function' && typeof VideoEncoder === 'function' &&
-                      typeof AudioDecoder === 'function' && typeof AudioEncoder === 'function' &&
                       typeof VideoFrame === 'function';
 
     // Les vérifications indépendantes tournent en parallèle pour accélérer le démarrage
@@ -83,12 +83,18 @@ const Capacites = {
         ? Promise.all([
             soutenu(() => VideoDecoder.isConfigSupported({ codec: 'avc1.640028' })),
             soutenu(() => VideoDecoder.isConfigSupported({ codec: 'hvc1.1.6.L120.90' })),
-            soutenu(() => VideoEncoder.isConfigSupported(configEncodage(1280, 720, 5000000))),
-            soutenu(() => VideoEncoder.isConfigSupported(configEncodage(1920, 1080, 8000000))),
+            encodageH264Soutenu(1280, 720, 5000000),
+            encodageH264Soutenu(1920, 1080, 8000000),
             choisirEncodeur(1280, 720, 5000000),
-            soutenu(() => AudioDecoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2 })),
-            soutenu(() => AudioDecoder.isConfigSupported({ codec: 'mp3', sampleRate: 44100, numberOfChannels: 2 })),
-            soutenu(() => AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 }))
+            typeof AudioDecoder === 'function'
+              ? soutenu(() => AudioDecoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2 }))
+              : Promise.resolve(false),
+            typeof AudioDecoder === 'function'
+              ? soutenu(() => AudioDecoder.isConfigSupported({ codec: 'mp3', sampleRate: 44100, numberOfChannels: 2 }))
+              : Promise.resolve(false),
+            typeof AudioEncoder === 'function'
+              ? soutenu(() => AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 }))
+              : Promise.resolve(false)
           ])
         : Promise.resolve(null),
       testerDisquePrive(),
@@ -161,16 +167,23 @@ const Capacites = {
       if (lireAac && lireMp3) {
         ajouter('son', 'ok', 'Lecture du son', 'Le son des vidéos et les musiques MP3 sont lisibles.');
       } else {
+        const manque = !lireAac && !lireMp3
+          ? ' (son des vidéos et musiques MP3).'
+          : (lireAac ? ' (musiques MP3).' : ' (son des vidéos).');
         ajouter('son', 'attention', 'Lecture du son',
-          'Certains sons ne pourront pas être lus' + (lireAac ? ' (musiques MP3).' : ' (son des vidéos).') +
+          'Certains sons ne pourront pas être lus' + manque +
           ' Mettre Google Chrome à jour peut régler le souci.');
       }
       if (r.aacDirect) {
         ajouter('aac', 'ok', 'Fabrication du son', 'Ta tablette fabrique le son de la vidéo finale (format AAC).');
-      } else {
+      } else if (typeof WebAssembly === 'object') {
         ajouter('aac', 'attention', 'Fabrication du son',
           'Ta tablette ne fabrique pas elle-même le son au format AAC demandé par YouTube. ' +
           'Omni-Vidéo utilisera sa propre méthode de secours, un peu plus lente.');
+      } else {
+        r.peutExporter = false;
+        ajouter('aac', 'bloquant', 'Fabrication du son',
+          'Ta tablette ne sait pas fabriquer le son au format AAC (WebAssembly indisponible).');
       }
     }
 
@@ -430,11 +443,12 @@ const Place = {
 };
 
 
-/* Réglages d'encodage H.264 utilisés pour le test (profil « High »,
-   celui que YouTube recommande). */
-function configEncodage(largeur, hauteur, debit) {
+/* Réglages d'encodage H.264 utilisés pour le test (profils High, Main, Baseline). */
+function configEncodage(largeur, hauteur, debit, codeProfil) {
+  const code = codeProfil || PROFILS_H264[0].code;
+  const niveau = largeur * hauteur > 1280 * 720 ? '28' : '1f';
   return {
-    codec: largeur * hauteur > 1280 * 720 ? 'avc1.640028' : 'avc1.64001f',
+    codec: 'avc1.' + code + niveau,
     width: largeur,
     height: hauteur,
     bitrate: debit,
@@ -442,23 +456,11 @@ function configEncodage(largeur, hauteur, debit) {
   };
 }
 
-/* Pose une question « est-ce pris en charge ? » au navigateur, sans
-   jamais planter : une erreur ou une réponse trop lente = « non ». */
-async function soutenu(question) {
-  try {
-    const reponse = await avecDelai(question(), 5000);
-    return !!(reponse && reponse.supported);
-  } catch (e) {
-    return false;
+async function encodageH264Soutenu(largeur, hauteur, debit) {
+  for (const { code } of PROFILS_H264) {
+    if (await soutenu(() => VideoEncoder.isConfigSupported(configEncodage(largeur, hauteur, debit, code)))) return true;
   }
-}
-
-/* Abandonne une attente trop longue (certains navigateurs ne répondent jamais). */
-function avecDelai(promesse, ms) {
-  return Promise.race([
-    promesse,
-    new Promise((_, echouer) => setTimeout(() => echouer(new Error('Délai dépassé')), ms))
-  ]);
+  return false;
 }
 
 /* Essaie d'écrire un tout petit fichier dans le « disque privé » du

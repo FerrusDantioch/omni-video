@@ -272,6 +272,8 @@ async function analyserImage(fichier) {
   } catch (e) {
     throw erreurPourTous('Ce format d\'image n\'est pas lisible ici. Choisis une image JPEG, PNG ou WebP.');
   }
+  let toile = null;
+  let mini = null;
   try {
     const echelle = Math.min(1, IMAGE_COTE_MAX / Math.max(image.width, image.height));
     const l = Math.max(1, Math.round(image.width * echelle));
@@ -279,18 +281,22 @@ async function analyserImage(fichier) {
 
     // Les PNG, WebP et GIF peuvent être transparents : on garde la transparence
     const transparente = /png|webp|gif/i.test(fichier.type);
-    const toile = nouvelleToile(l, h);
+    toile = nouvelleToile(l, h);
     toile.getContext('2d').drawImage(image, 0, 0, l, h);
     const blob = await toileEnBlob(toile, transparente ? 'image/png' : 'image/jpeg', 0.92);
 
     // Miniature
     const em = MINIATURE_COTE / Math.min(l, h);
-    const mini = nouvelleToile(Math.max(1, Math.round(l * em)), Math.max(1, Math.round(h * em)));
+    mini = nouvelleToile(Math.max(1, Math.round(l * em)), Math.max(1, Math.round(h * em)));
     mini.getContext('2d').drawImage(toile, 0, 0, mini.width, mini.height);
+    libererToile(toile);
+    toile = null;
     const miniature = await toileEnImage(mini, 'image/webp', 0.8);
 
     return { blob, infos: { largeur: l, hauteur: h, duree: 0, miniature } };
   } finally {
+    libererToile(toile);
+    libererToile(mini);
     image.close();   // libère la photo en mémoire tout de suite
   }
 }
@@ -318,35 +324,4 @@ async function analyserAudio(fichier) {
   } finally {
     entree.dispose();
   }
-}
-
-
-/* ---------- Petites aides pour les dessins (« toiles ») ---------- */
-
-function nouvelleToile(largeur, hauteur) {
-  const toile = document.createElement('canvas');
-  toile.width = largeur;
-  toile.height = hauteur;
-  return toile;
-}
-
-/* Une toile → un fichier image (Blob) */
-function toileEnBlob(toile, type, qualite) {
-  if (typeof toile.convertToBlob === 'function') return toile.convertToBlob({ type, quality: qualite });
-  return new Promise((reussir, echouer) => {
-    toile.toBlob((blob) => (blob ? reussir(blob) : echouer(new Error('Image impossible'))), type, qualite);
-  });
-}
-
-/* Une toile → une petite image écrite en texte (« data:image/… »),
-   facile à ranger dans la description du projet. */
-async function toileEnImage(toile, type, qualite) {
-  if (typeof toile.toDataURL === 'function') return toile.toDataURL(type, qualite);
-  const blob = await toileEnBlob(toile, type, qualite);
-  return new Promise((reussir) => {
-    const lecteur = new FileReader();
-    lecteur.onload = () => reussir(lecteur.result);
-    lecteur.onerror = () => reussir('');
-    lecteur.readAsDataURL(blob);
-  });
 }

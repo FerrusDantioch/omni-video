@@ -23,6 +23,9 @@
 /* Les niveaux de zoom, en pixels par seconde de vidéo */
 const NIVEAUX_ZOOM = [0.5, 1, 2, 4, 8, 15, 30, 60, 120, 240];
 const HISTORIQUE_MAX = 60;   // nombre de retours en arrière possibles
+const CHRONO_PAS_RANGEE = 34;   // 30 px de piste + 4 px d'écart
+const CHRONO_HAUTEUR_1 = '34px';
+const CHRONO_HAUTEUR_2 = '68px';
 
 const Chronologie = {
   pps: 30,                 // pixels par seconde (le zoom)
@@ -32,6 +35,8 @@ const Chronologie = {
   _demandeDefilement: 0,
   _historique: [],
   _refaire: [],
+  _mediasUndo: new Map(),
+  _mediasRetires: new Set(),
   _indexAffiche: -2,       // pour ne redessiner les outils que si le clip change
   _enLectureAffiche: null,
   _videAffiche: null,
@@ -124,6 +129,10 @@ const Chronologie = {
   ouvrir(projet) {
     this._historique = [];
     this._refaire = [];
+    this._mediasUndo.clear();
+    this._mediasRetires.clear();
+    if (typeof SousTitres !== 'undefined') SousTitres._dernierDecalage = 0;
+    if (typeof Chapitres !== 'undefined') Chapitres._titreMemoriseId = null;
     Lecteur.calculer(projet);
     this.pps = this._zoomPourTout(Lecteur.duree());
     this.dessiner();
@@ -156,13 +165,17 @@ const Chronologie = {
     // La règle : un repère toutes les N secondes, N choisi pour garder
     // au moins 70 pixels entre deux repères
     const pas = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1200].find((p) => p * this.pps >= 70) || 1800;
-    let regle = '';
+    const frag = document.createDocumentFragment();
     for (let s = 0; s <= duree + 0.001; s += pas) {
-      regle += '<span class="chrono-repere" style="left:' + Math.round(this._marge + s * this.pps) + 'px">' + formaterDuree(s) + '</span>';
+      const span = document.createElement('span');
+      span.className = 'chrono-repere';
+      span.style.left = Math.round(this._marge + s * this.pps) + 'px';
+      span.textContent = formaterDuree(s);
+      frag.appendChild(span);
     }
     // Les chapitres YouTube : un petit drapeau dans la règle
-    regle += Chapitres.reperes(projet, this._marge, this.pps);
-    $('#chrono-regle').innerHTML = regle;
+    if (typeof Chapitres !== 'undefined') frag.appendChild(Chapitres.reperes(projet, this._marge, this.pps));
+    $('#chrono-regle').replaceChildren(frag);
   },
 
   dessiner() {
@@ -177,17 +190,28 @@ const Chronologie = {
     this.dessinerRegle();
 
     // Les clips
-    $('#chrono-clips').innerHTML = Lecteur.segments.map((seg, i) => {
+    const fragClips = document.createDocumentFragment();
+    Lecteur.segments.forEach((seg, i) => {
       const largeur = Math.max(3, (seg.fin - seg.debut) * this.pps);
-      const classes = ['chrono-clip'];
-      if (seg.media.type === 'image') classes.push('chrono-image');
-      if (!Medias.disponible(seg.media)) classes.push('chrono-manquant');
-      const fond = seg.media.miniature ? 'background-image:url(' + seg.media.miniature + ');' : '';
-      const duree = largeur > 54 ? '<span class="chrono-clip-duree">' + formaterDuree(seg.fin - seg.debut) + '</span>' : '';
-      return '<div class="' + classes.join(' ') + '" data-index="' + i + '" style="left:' +
-        (this._marge + seg.debut * this.pps).toFixed(1) + 'px;width:' + largeur.toFixed(1) + 'px;' + fond + '">' +
-        duree + '</div>';
-    }).join('');
+      const div = document.createElement('div');
+      div.className = 'chrono-clip' +
+        (seg.media.type === 'image' ? ' chrono-image' : '') +
+        (!Medias.disponible(seg.media) ? ' chrono-manquant' : '');
+      div.dataset.index = String(i);
+      div.style.left = (this._marge + seg.debut * this.pps).toFixed(1) + 'px';
+      div.style.width = largeur.toFixed(1) + 'px';
+      if (miniatureValide(seg.media.miniature)) {
+        div.style.backgroundImage = 'url("' + seg.media.miniature + '")';
+      }
+      if (largeur > 54) {
+        const span = document.createElement('span');
+        span.className = 'chrono-clip-duree';
+        span.textContent = formaterDuree(seg.fin - seg.debut);
+        div.appendChild(span);
+      }
+      fragClips.appendChild(div);
+    });
+    $('#chrono-clips').replaceChildren(fragClips);
 
     this.dessinerCalques();
     this.dessinerSousTitres();
@@ -209,19 +233,30 @@ const Chronologie = {
     if (!projet) return;
     // Pas de calque : la ligne ne prend pas de place ; une seule rangée si
     // aucun calque n'en chevauche un autre
-    $('#chrono-piste').style.setProperty('--h-calques', projet.calques.length ? (this._chevauchement(projet.calques) ? '40px' : '21px') : '0px');
+    $('#chrono-piste').style.setProperty('--h-calques', projet.calques.length ? (this._chevauchement(projet.calques) ? CHRONO_HAUTEUR_2 : CHRONO_HAUTEUR_1) : '0px');
     const finRangee = [-Infinity, -Infinity];
     const calques = projet.calques.slice().sort((a, b) => a.debut - b.debut);
-    $('#chrono-calques').innerHTML = calques.map((c) => {
+    const frag = document.createDocumentFragment();
+    for (const c of calques) {
       const rangee = c.debut >= finRangee[0] ? 0 : 1;
       finRangee[rangee] = Math.max(finRangee[rangee], c.debut + c.duree);
       const media = c.type === 'image' ? projet.medias.find((m) => m.id === c.mediaId) : null;
       const libelle = c.type === 'texte' ? c.texte.trim().split('\n')[0] || 'Texte' : (media ? media.nom : 'Image');
-      return '<button type="button" class="chrono-calque chrono-calque-' + c.type + '" data-action="editer-calque" data-id="' + proteger(c.id) + '" ' +
-        'style="left:' + (this._marge + c.debut * this.pps).toFixed(1) + 'px;width:' + Math.max(18, c.duree * this.pps).toFixed(1) + 'px;top:' + (rangee * 19) + 'px" ' +
-        'aria-label="Modifier : ' + proteger(libelle) + '">' +
-        '<span>' + (c.type === 'texte' ? 'T ' : '▣ ') + proteger(libelle) + '</span></button>';
-    }).join('');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chrono-calque chrono-calque-' + c.type;
+      btn.dataset.action = 'editer-calque';
+      btn.dataset.id = c.id;
+      btn.style.left = (this._marge + c.debut * this.pps).toFixed(1) + 'px';
+      btn.style.width = Math.max(18, c.duree * this.pps).toFixed(1) + 'px';
+      btn.style.top = (rangee * CHRONO_PAS_RANGEE) + 'px';
+      btn.setAttribute('aria-label', 'Modifier : ' + libelle);
+      const span = document.createElement('span');
+      span.textContent = (c.type === 'texte' ? 'T ' : '▣ ') + libelle;
+      btn.appendChild(span);
+      frag.appendChild(btn);
+    }
+    $('#chrono-calques').replaceChildren(frag);
   },
 
   /* Les sous-titres, en petites barres grises juste au-dessus des clips
@@ -231,16 +266,27 @@ const Chronologie = {
     const projet = Projets.courant;
     if (!projet) return;
     const liste = projet.sousTitres;
-    $('#chrono-piste').style.setProperty('--h-st', liste.length ? '21px' : '0px');
-    $('#chrono-sous-titres').innerHTML = liste.map((s) => {
+    $('#chrono-piste').style.setProperty('--h-st', liste.length ? CHRONO_HAUTEUR_1 : '0px');
+    const frag = document.createDocumentFragment();
+    for (const s of liste) {
       const largeur = Math.max(6, s.duree * this.pps);
       const libelle = s.texte.trim().replace(/\n/g, ' ') || '…';
-      return '<button type="button" class="chrono-sous-titre' + (s.id === SousTitres.edite ? ' selectionne' : '') + '" ' +
-        'data-action="editer-sous-titre" data-id="' + proteger(s.id) + '" ' +
-        'style="left:' + (this._marge + s.debut * this.pps).toFixed(1) + 'px;width:' + largeur.toFixed(1) + 'px" ' +
-        'aria-label="Modifier le sous-titre : ' + proteger(libelle) + '">' +
-        (largeur > 30 ? '<span>' + proteger(libelle) + '</span>' : '') + '</button>';
-    }).join('');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chrono-sous-titre' + (typeof SousTitres !== 'undefined' && s.id === SousTitres.edite ? ' selectionne' : '');
+      btn.dataset.action = 'editer-sous-titre';
+      btn.dataset.id = s.id;
+      btn.style.left = (this._marge + s.debut * this.pps).toFixed(1) + 'px';
+      btn.style.width = largeur.toFixed(1) + 'px';
+      btn.setAttribute('aria-label', 'Modifier le sous-titre : ' + libelle);
+      if (largeur > 30) {
+        const span = document.createElement('span');
+        span.textContent = libelle;
+        btn.appendChild(span);
+      }
+      frag.appendChild(btn);
+    }
+    $('#chrono-sous-titres').replaceChildren(frag);
   },
 
   /* Met à jour un seul sous-titre dans la bande (pendant qu'on tape son
@@ -264,21 +310,36 @@ const Chronologie = {
   dessinerTransitions() {
     const projet = Projets.courant;
     const segs = Lecteur.segments;
-    if (!projet || !segs.length) { $('#chrono-transitions').innerHTML = ''; return; }
-    const pastille = (cle, t, transition, libelle) =>
-      '<button type="button" class="chrono-transition' + (transition && transition.type !== 'aucune' ? ' active' : '') + '" ' +
-      'data-action="choisir-transition" data-cle="' + cle + '" style="left:' + (this._marge + t * this.pps).toFixed(1) + 'px" ' +
-      'aria-label="' + libelle + ' : ' + NOMS_TRANSITIONS[transition ? transition.type : 'aucune'] + '">' +
-      '<svg class="icone" aria-hidden="true"><use href="#i-transition"/></svg></button>';
-    let html = pastille('debut', 0, projet.transitionDebut, 'Début de la vidéo');
+    const conteneur = $('#chrono-transitions');
+    if (!projet || !segs.length) { conteneur.replaceChildren(); return; }
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const frag = document.createDocumentFragment();
+    const pastille = (cle, t, transition, libelle) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chrono-transition' + (transition && transition.type !== 'aucune' ? ' active' : '');
+      btn.dataset.action = 'choisir-transition';
+      btn.dataset.cle = String(cle);
+      btn.style.left = (this._marge + t * this.pps).toFixed(1) + 'px';
+      btn.setAttribute('aria-label', libelle + ' : ' + NOMS_TRANSITIONS[transition ? transition.type : 'aucune']);
+      const svg = document.createElementNS(SVG_NS, 'svg');
+      svg.setAttribute('class', 'icone');
+      svg.setAttribute('aria-hidden', 'true');
+      const use = document.createElementNS(SVG_NS, 'use');
+      use.setAttribute('href', '#i-transition');
+      svg.appendChild(use);
+      btn.appendChild(svg);
+      frag.appendChild(btn);
+    };
+    pastille('debut', 0, projet.transitionDebut, 'Début de la vidéo');
     for (let i = 1; i < segs.length; i++) {
       const s = segs[i];
       const chevauche = s.transition && s.transition.type !== 'fondu';
       const centre = s.debut + (chevauche ? s.transition.duree / 2 : 0);
-      html += pastille(i, centre, s.transition, 'Transition entre le clip ' + i + ' et le clip ' + (i + 1));
+      pastille(i, centre, s.transition, 'Transition entre le clip ' + i + ' et le clip ' + (i + 1));
     }
-    html += pastille('fin', Lecteur.duree(), projet.transitionFin, 'Fin de la vidéo');
-    $('#chrono-transitions').innerHTML = html;
+    pastille('fin', Lecteur.duree(), projet.transitionFin, 'Fin de la vidéo');
+    conteneur.replaceChildren(frag);
   },
 
   /* ---------- Choisir une transition ----------
@@ -362,17 +423,28 @@ const Chronologie = {
     if (!projet) return;
     const musique = projet.pistes.some((p) => p.type === 'musique');
     const voix = projet.pistes.some((p) => p.type === 'voix');
-    $('#chrono-piste').style.setProperty('--h-pistes', musique && voix ? '40px' : (musique || voix ? '21px' : '0px'));
-    const rangeeVoix = musique ? 19 : 0;
-    $('#chrono-pistes').innerHTML = projet.pistes.map((p) => {
+    $('#chrono-piste').style.setProperty('--h-pistes', musique && voix ? CHRONO_HAUTEUR_2 : (musique || voix ? CHRONO_HAUTEUR_1 : '0px'));
+    const rangeeVoix = musique ? CHRONO_PAS_RANGEE : 0;
+    const frag = document.createDocumentFragment();
+    for (const p of projet.pistes) {
       const media = projet.medias.find((m) => m.id === p.mediaId);
       const nom = media ? media.nom : 'Son';
-      const duree = PistesAudio.duree(p);
-      return '<button type="button" class="chrono-piste-audio chrono-' + p.type + '" data-action="onglet" data-onglet="son" ' +
-        'style="left:' + (this._marge + p.debut * this.pps).toFixed(1) + 'px;width:' + Math.max(18, duree * this.pps).toFixed(1) + 'px;top:' + (p.type === 'voix' ? rangeeVoix : 0) + 'px" ' +
-        'aria-label="Régler le son : ' + proteger(nom) + '"><span>' + (p.type === 'musique' ? '♪ ' : '') + proteger(nom) +
-        ' · ' + Math.round(p.volume * 100) + ' %</span></button>';
-    }).join('');
+      const duree = typeof PistesAudio !== 'undefined' ? PistesAudio.duree(p) : p.duree;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chrono-piste-audio chrono-' + p.type;
+      btn.dataset.action = 'onglet';
+      btn.dataset.onglet = 'son';
+      btn.style.left = (this._marge + p.debut * this.pps).toFixed(1) + 'px';
+      btn.style.width = Math.max(18, duree * this.pps).toFixed(1) + 'px';
+      btn.style.top = (p.type === 'voix' ? rangeeVoix : 0) + 'px';
+      btn.setAttribute('aria-label', 'Régler le son : ' + nom);
+      const span = document.createElement('span');
+      span.textContent = (p.type === 'musique' ? '♪ ' : '') + nom + ' · ' + Math.round(p.volume * 100) + ' %';
+      btn.appendChild(span);
+      frag.appendChild(btn);
+    }
+    $('#chrono-pistes').replaceChildren(frag);
   },
 
   /* ---------- La bande et la ligne ---------- */
@@ -421,13 +493,13 @@ const Chronologie = {
     // Bouton Lecture / Pause et commandes : mis à jour seulement quand l'état change
     if (Lecteur.enLecture !== this._enLectureAffiche) {
       this._enLectureAffiche = Lecteur.enLecture;
-      this._elBoutonLectureUse.setAttribute('href', Lecteur.enLecture ? '#i-pause' : '#i-lecture');
-      ecrireTexte(this._elBoutonLectureSpan, Lecteur.enLecture ? 'Pause' : 'Lecture');
+      if (this._elBoutonLectureUse) this._elBoutonLectureUse.setAttribute('href', Lecteur.enLecture ? '#i-pause' : '#i-lecture');
+      if (this._elBoutonLectureSpan) ecrireTexte(this._elBoutonLectureSpan, Lecteur.enLecture ? 'Pause' : 'Lecture');
     }
     const vide = Lecteur.segments.length === 0;
     if (vide !== this._videAffiche) {
       this._videAffiche = vide;
-      this._boutonsCommandes.forEach((b) => { b.disabled = vide; });
+      if (this._boutonsCommandes) this._boutonsCommandes.forEach((b) => { b.disabled = vide; });
     }
 
     // Le clip sous la ligne
@@ -508,6 +580,7 @@ const Chronologie = {
      Avant chaque modification, on garde une copie de la liste des clips. */
 
   _memoriser() {
+    if (typeof SousTitres !== 'undefined') SousTitres._dernierDecalage = 0;
     this._historique.push(this._photo());
     if (this._historique.length > HISTORIQUE_MAX) this._historique.shift();
     this._refaire = [];
@@ -517,6 +590,7 @@ const Chronologie = {
   _photo() {
     const p = Projets.courant;
     return JSON.stringify({
+      mediasIds: p.medias.map((m) => m.id),
       clips: p.clips, calques: p.calques, pistes: p.pistes,
       transitionDebut: p.transitionDebut, transitionFin: p.transitionFin,
       sousTitres: p.sousTitres, styleSousTitres: p.styleSousTitres, chapitres: p.chapitres, baisserMusique: p.baisserMusique, t: Lecteur.t
@@ -526,6 +600,16 @@ const Chronologie = {
   _restaurer(photo) {
     const projet = Projets.courant;
     const donnees = JSON.parse(photo);
+    if (Array.isArray(donnees.mediasIds)) {
+      const cibles = new Set(donnees.mediasIds);
+      projet.medias = projet.medias.filter((m) => cibles.has(m.id) || !this._mediasUndo.has(m.id));
+      for (const id of donnees.mediasIds) {
+        if (this._mediasRetires.has(id)) continue;
+        if (projet.medias.some((m) => m.id === id)) continue;
+        const m = this._mediasUndo.get(id);
+        if (m) projet.medias.push(nettoyerMedia(m));
+      }
+    }
     // Un clip ou une image dont le fichier a été retiré du projet entre-temps est oublié
     projet.clips = donnees.clips.map((c) => nettoyerClip(c, projet.medias)).filter(Boolean);
     projet.calques = (donnees.calques || []).map((c) => nettoyerCalque(c, projet.medias)).filter(Boolean);
@@ -536,25 +620,42 @@ const Chronologie = {
     projet.styleSousTitres = nettoyerStyleSousTitres(donnees.styleSousTitres);
     projet.chapitres = nettoyerChapitres(donnees.chapitres);
     projet.baisserMusique = donnees.baisserMusique !== false;
+    if (typeof Chapitres !== 'undefined') Chapitres._titreMemoriseId = null;
+    if (typeof SousTitres !== 'undefined') SousTitres._dernierDecalage = 0;
     this._apresModification(donnees.t);
-    Chapitres.afficherListe();
-    PistesAudio.afficherListes();
-    PistesAudio.synchroniser();
+    if (typeof Chapitres !== 'undefined') Chapitres.afficherListe();
+    if (typeof PistesAudio !== 'undefined') { PistesAudio.afficherListes(); PistesAudio.synchroniser(); }
     // L'éditeur ouvert suit (ou se ferme si son calque n'existe plus)
-    if (Incrustations.edite) {
-      if (Incrustations.calque(Incrustations.edite)) { Incrustations.majEditeur(); Incrustations._dejaMemorise = false; }
-      else Incrustations.fermerEditeur();
-    } else {
-      Incrustations.afficherListes();
+    if (typeof Incrustations !== 'undefined') {
+      if (Incrustations.edite) {
+        if (Incrustations.calque(Incrustations.edite)) { Incrustations.majEditeur(); Incrustations._dejaMemorise = false; }
+        else Incrustations.fermerEditeur();
+      } else {
+        Incrustations.afficherListes();
+      }
     }
     // Pareil pour l'éditeur d'un sous-titre
-    SousTitres._nouveau = null;
-    if (SousTitres.edite) {
-      if (SousTitres.trouver(SousTitres.edite)) { SousTitres.majEditeur(); SousTitres._dejaMemorise = false; }
-      else SousTitres.fermerEditeur();
+    if (typeof SousTitres !== 'undefined') {
+      SousTitres._nouveau = null;
+      if (SousTitres.edite) {
+        if (SousTitres.trouver(SousTitres.edite)) { SousTitres.majEditeur(); SousTitres._dejaMemorise = false; }
+        else SousTitres.fermerEditeur();
+      }
+      SousTitres.afficherListe();
     }
-    SousTitres.afficherListe();
-    Incrustations.redessiner(true);
+    if (typeof Incrustations !== 'undefined') Incrustations.redessiner(true);
+  },
+
+  purgerMediasOrphelins(projet) {
+    if (!projet) return;
+    const presents = new Set(projet.medias.map((m) => m.id));
+    for (const [id, m] of this._mediasUndo) {
+      if (!presents.has(id)) {
+        Medias.oublier(id);
+        if (m.type !== 'video') Base.supprimerFichier(id).catch(() => {});
+        this._mediasUndo.delete(id);
+      }
+    }
   },
 
   annuler() {

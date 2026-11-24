@@ -27,6 +27,10 @@
 
 const MAGIE_SAUVEGARDE = 'OMNIVIDEO-PROJET-1\n';
 const EXTENSION_SAUVEGARDE = '.omnivideo';
+const TAILLE_DESC_SAUVEGARDE_MAX = 32 * 1024 * 1024;
+const NB_FICHIERS_SAUVEGARDE_MAX = 1000;
+const TAILLE_FICHIER_SAUVEGARDE_MAX = 256 * 1024 * 1024;
+const REGEX_MIME_SAUVEGARDE = /^(?:image\/(?:png|jpeg|webp|gif)|audio\/[a-z0-9.+-]+)(?:\s*;\s*codecs=[a-z0-9.,+-]+)?$/i;
 
 const Sauvegarde = {
   /* ---------- Sauvegarder un projet dans un fichier ---------- */
@@ -84,13 +88,19 @@ const Sauvegarde = {
     const entete = new Uint8Array(await fichier.slice(0, debut + 4).arrayBuffer());
     if (new TextDecoder().decode(entete.subarray(0, debut)) !== MAGIE_SAUVEGARDE) { pasUneSauvegarde(); return; }
     const longueur = new DataView(entete.buffer).getUint32(debut, true);
+    if (longueur === 0 || longueur > TAILLE_DESC_SAUVEGARDE_MAX || debut + 4 + longueur > fichier.size) {
+      pasUneSauvegarde();
+      return;
+    }
     let donnees;
     try {
       donnees = JSON.parse(await fichier.slice(debut + 4, debut + 4 + longueur).text());
     } catch (e) {
       donnees = null;
     }
-    if (!donnees || donnees.format !== 'omnivideo-projet' || !donnees.projet || !Array.isArray(donnees.fichiers)) {
+    if (!donnees || donnees.format !== 'omnivideo-projet' || donnees.version !== 1 ||
+        !donnees.projet || !Array.isArray(donnees.fichiers) ||
+        donnees.fichiers.length > NB_FICHIERS_SAUVEGARDE_MAX) {
       pasUneSauvegarde();
       return;
     }
@@ -113,19 +123,35 @@ const Sauvegarde = {
     const projet = nettoyerProjet(brut);
     if (!projet) { pasUneSauvegarde(); return; }
 
-    // 3. Les fichiers légers, rangés dans la tablette un par un
+    // 2 bis. Validation complète de la table des fichiers avant toute écriture en base
+    let position = debut + 4 + longueur;
+    const aEnregistrer = [];
+    for (const f of donnees.fichiers) {
+      if (!f || typeof f !== 'object' || !Number.isInteger(f.taille) ||
+          f.taille < 0 || f.taille > TAILLE_FICHIER_SAUVEGARDE_MAX ||
+          position + f.taille > fichier.size) {
+        pasUneSauvegarde();
+        return;
+      }
+      const type = typeof f.type === 'string' && f.type.length <= 100 &&
+        (f.type === '' || REGEX_MIME_SAUVEGARDE.test(f.type)) ? f.type : '';
+      const nouveau = correspondance.get(f.id);
+      if (nouveau) {
+        aEnregistrer.push({ id: nouveau, debut: position, fin: position + f.taille, type });
+      }
+      position += f.taille;
+    }
+
+    // 3. Les fichiers légers, rangés dans la tablette un par un (avec nettoyage en cas d'échec)
+    const enregistres = [];
     try {
-      let position = debut + 4 + longueur;
-      for (const f of donnees.fichiers) {
-        const taille = Number(f && f.taille) || 0;
-        const nouveau = correspondance.get(f && f.id);
-        if (nouveau && position + taille <= fichier.size) {
-          await Base.enregistrerFichier(nouveau, fichier.slice(position, position + taille, String(f.type || '')));
-        }
-        position += taille;
+      for (const item of aEnregistrer) {
+        await Base.enregistrerFichier(item.id, fichier.slice(item.debut, item.fin, item.type));
+        enregistres.push(item.id);
       }
       await Base.enregistrerProjet(projet);
     } catch (e) {
+      await Promise.all(enregistres.map((id) => Base.supprimerFichier(id).catch(() => {})));
       Message.probleme(messageErreurStockage(e));
       return;
     }

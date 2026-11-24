@@ -36,6 +36,7 @@ lancer('Omni-Vidéo', async () => {
     await p.fill('#fenetre-nouveau input[name="nom"]', 'Test automatique');
     await p.click('#fenetre-nouveau button[value="ok"]');
     await p.waitForTimeout(1200);
+    await p.waitForSelector('#guide-passer', { state: 'visible', timeout: 3000 }).then(() => p.click('#guide-passer')).catch(() => {});
     verifier((await texte(p, '#titre-projet')).includes('Test automatique'), 'le projet s’ouvre');
   });
 
@@ -219,6 +220,7 @@ lancer('Omni-Vidéo', async () => {
 
   await section('Import .omnivideo XSS et bornes', async () => {
     await aller(p, '[data-action="retour"]');
+    await p.waitForSelector('#liste-projets > li', { timeout: 5000 });
     const fabriquerContainer = (descObj, rawLen) => {
       const magie = Buffer.from('OMNIVIDEO-PROJET-1\n', 'utf8');
       const desc = Buffer.from(JSON.stringify(descObj), 'utf8');
@@ -266,8 +268,8 @@ lancer('Omni-Vidéo', async () => {
   await section('Vérifier ma tablette, Refaire le test et repli Safari (sans AudioEncoder)', async () => {
     await aller(p, '.pied [data-action="voir-tablette"]');
     await aller(p, '[data-action="refaire-test"]');
-    await p.waitForSelector('#liste-tests > li', { timeout: 10000 });
-    const nbTests = await p.$$eval('#liste-tests > li', (l) => l.length);
+    await p.waitForSelector('#liste-tests > li.test', { timeout: 15000 });
+    const nbTests = await p.$$eval('#liste-tests > li.test', (l) => l.length);
     verifier(nbTests >= 5, 'Refaire le test remplit la liste des diagnostics', nbTests);
     await verifierCsp(p);
     await ctx.close();
@@ -277,7 +279,7 @@ lancer('Omni-Vidéo', async () => {
       viewport: { width: 1280, height: 800 },
       avant: async (c) => { await c.addInitScript(() => { delete window.AudioEncoder; }); }
     });
-    await pSafari.waitForTimeout(1500);
+    await pSafari.waitForFunction(() => typeof Capacites !== 'undefined' && Capacites.resultat !== null, null, { timeout: 15000 });
     const capSafari = await pSafari.evaluate(() => ({
       peutExporter: Capacites.resultat && Capacites.resultat.peutExporter,
       aacDirect: Capacites.resultat && Capacites.resultat.aacDirect
@@ -288,6 +290,7 @@ lancer('Omni-Vidéo', async () => {
     await pSafari.fill('#fenetre-nouveau input[name="nom"]', 'Test Safari WASM');
     await pSafari.click('#fenetre-nouveau button[value="ok"]');
     await pSafari.waitForTimeout(1000);
+    await pSafari.waitForSelector('#guide-passer', { state: 'visible', timeout: 3000 }).then(() => pSafari.click('#guide-passer')).catch(() => {});
     const [fcSafari] = await Promise.all([pSafari.waitForEvent('filechooser'), pSafari.click('[data-action="importer"][data-type="video"]')]);
     await fcSafari.setFiles({ name: 'exemple.mp4', mimeType: 'video/mp4', buffer: fs.readFileSync(EXEMPLE) });
     await pSafari.waitForSelector('#liste-medias > *', { timeout: 20000 });

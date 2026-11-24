@@ -8,8 +8,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import { afterEach } from 'node:test';
 
 export const RACINE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+
+const nettoyeursActifs = new Set();
+
+afterEach(() => {
+  for (const nettoyer of [...nettoyeursActifs]) {
+    nettoyer();
+  }
+  nettoyeursActifs.clear();
+});
 
 export class MockOPFS {
   constructor() {
@@ -244,6 +254,7 @@ export function creerEl(tag = 'div') {
 
 export function creerContexte(overrides = {}) {
   const timers = new Map();
+  const intervals = new Map();
   let nextTimerId = 1;
   const scheduledTimers = [];
   const storageData = new Map();
@@ -343,7 +354,6 @@ export function creerContexte(overrides = {}) {
       const id = nextTimerId++;
       scheduledTimers.push({ id, ms, fn });
       const handle = globalThis.setTimeout(() => { timers.delete(id); fn(...args); }, ms);
-      if (handle.unref) handle.unref();
       timers.set(id, handle);
       return id;
     },
@@ -352,14 +362,25 @@ export function creerContexte(overrides = {}) {
       if (h) { globalThis.clearTimeout(h); timers.delete(id); }
     },
     setInterval: (fn, ms, ...args) => {
-      const h = globalThis.setInterval(fn, ms, ...args);
-      if (h.unref) h.unref();
-      return h;
+      const id = nextTimerId++;
+      const handle = globalThis.setInterval(fn, ms, ...args);
+      intervals.set(id, handle);
+      return id;
     },
-    clearInterval: globalThis.clearInterval,
+    clearInterval: (id) => {
+      const h = intervals.get(id);
+      if (h) { globalThis.clearInterval(h); intervals.delete(id); }
+    },
     requestAnimationFrame: (fn) => ctx.setTimeout(() => fn(Date.now()), 0),
     ResizeObserver: class { observe() {} disconnect() {} },
     ...overrides
+  };
+
+  const nettoyerMinuteurs = () => {
+    for (const h of timers.values()) globalThis.clearTimeout(h);
+    timers.clear();
+    for (const h of intervals.values()) globalThis.clearInterval(h);
+    intervals.clear();
   };
 
   ctx.window = ctx;
@@ -370,6 +391,8 @@ export function creerContexte(overrides = {}) {
   ctx._scheduledTimers = scheduledTimers;
   ctx._createdUrls = createdUrls;
   ctx._revokedUrls = revokedUrls;
+  ctx._nettoyerMinuteurs = nettoyerMinuteurs;
+  nettoyeursActifs.add(nettoyerMinuteurs);
   return vm.createContext(ctx);
 }
 

@@ -10,11 +10,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { creerContexte, chargerScripts, lireSymbole } from './_harnais.mjs';
 
-function preparerContexteUndo() {
+function preparerContexteUndo(t = null) {
   const fichiersDb = new Map();
   const projetsDb = new Map();
   const supprimes = [];
-  const ctx = creerContexte();
+  const ctx = creerContexte({}, t);
   ctx.Guide = { etape: -1, terminer() {} };
   ctx.Visionneuse = { fermer() {}, media: null };
   chargerScripts(ctx, [
@@ -192,8 +192,8 @@ test('Rendu.image() ferme l ImageBitmap si oublierImage/oublierImages survient a
   assert.equal(lireSymbole(ctx, "Rendu._images.has('m2')"), false);
 });
 
-test('libererToile remet width=0 et height=0 dans Miniature et analyserImage, et telechargerFichier attend >= 60 s', async () => {
-  const ctx = preparerContexteUndo();
+test('libererToile remet width=0 et height=0 dans Miniature et analyserImage, et telechargerFichier attend >= 60 s', async (t) => {
+  const ctx = preparerContexteUndo(t);
   await lireSymbole(ctx, `(async () => {
     // 1. Miniature.enregistrer + Miniature.oublier
     const fond = nouvelleToile(1280, 720);

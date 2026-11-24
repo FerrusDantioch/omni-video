@@ -8,18 +8,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
-import { afterEach } from 'node:test';
 
 export const RACINE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-
-const nettoyeursActifs = new Set();
-
-afterEach(() => {
-  for (const nettoyer of [...nettoyeursActifs]) {
-    nettoyer();
-  }
-  nettoyeursActifs.clear();
-});
 
 export class MockOPFS {
   constructor() {
@@ -252,7 +242,10 @@ export function creerEl(tag = 'div') {
   return el;
 }
 
-export function creerContexte(overrides = {}) {
+export function creerContexte(overrides = {}, t = null) {
+  const contexteTest = (t && typeof t.after === 'function')
+    ? t
+    : (overrides && overrides.t && typeof overrides.t.after === 'function' ? overrides.t : null);
   const timers = new Map();
   const intervals = new Map();
   let nextTimerId = 1;
@@ -354,6 +347,7 @@ export function creerContexte(overrides = {}) {
       const id = nextTimerId++;
       scheduledTimers.push({ id, ms, fn });
       const handle = globalThis.setTimeout(() => { timers.delete(id); fn(...args); }, ms);
+      if (!contexteTest && handle.unref && ms >= 30000) handle.unref();
       timers.set(id, handle);
       return id;
     },
@@ -364,6 +358,7 @@ export function creerContexte(overrides = {}) {
     setInterval: (fn, ms, ...args) => {
       const id = nextTimerId++;
       const handle = globalThis.setInterval(fn, ms, ...args);
+      if (!contexteTest && handle.unref && ms >= 30000) handle.unref();
       intervals.set(id, handle);
       return id;
     },
@@ -392,7 +387,7 @@ export function creerContexte(overrides = {}) {
   ctx._createdUrls = createdUrls;
   ctx._revokedUrls = revokedUrls;
   ctx._nettoyerMinuteurs = nettoyerMinuteurs;
-  nettoyeursActifs.add(nettoyerMinuteurs);
+  if (contexteTest) contexteTest.after(nettoyerMinuteurs);
   return vm.createContext(ctx);
 }
 

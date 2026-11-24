@@ -211,7 +211,7 @@ test('Reprise.effacer supprime les morceaux orphelins même avec des trous et sa
   opfs.files.set('omnivideo-partie-5.mp4', new Uint8Array([3]));
   opfs.files.set('autre-app-fichier.txt', new Uint8Array([9]));
 
-  const ctx = creerContextReprise(opfs);
+  const ctx = creerContexteReprise(opfs);
   await lireSymbole(ctx, 'Reprise.effacer()');
 
   assert.equal(opfs.files.has('omnivideo-son.mp4'), false);

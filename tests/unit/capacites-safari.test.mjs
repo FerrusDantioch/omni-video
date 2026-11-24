@@ -29,12 +29,15 @@ function preparerContexteCapacites(overrides = {}) {
     ctx[nom] = { initialiser() {}, afficherListe() {}, afficherBandeau() {}, redessiner() {}, fermer() {}, afficherProjet() {} };
   }
   ctx.Rendu = { chargerPolices: async () => {} };
-  ctx.Base.ouvrir = async () => ({});
   // Isoler demarrer() afin qu'il ne lance pas un Capacites.tester() concurrent en arrière-plan
-  const origTester = ctx.Capacites.tester.bind(ctx.Capacites);
-  ctx.Capacites.tester = async () => null;
+  ctx._origTester = lireSymbole(ctx, 'Capacites.tester.bind(Capacites)');
+  lireSymbole(ctx, `
+    Base.ouvrir = async () => ({});
+    Capacites.tester = async () => null;
+  `);
   chargerScripts(ctx, ['app.js']);
-  ctx.Capacites.tester = origTester;
+  lireSymbole(ctx, 'Capacites.tester = _origTester;');
+  delete ctx._origTester;
   return ctx;
 }
 
@@ -108,7 +111,7 @@ test('Action refaire-test vide _encodeurs et DisquePrive._essai avant de relance
     Capacites.tester = orig;
     return etatAuDebutDuTest;
   })()`);
-  assert.deepEqual(verif, { enc: 0, essai: null });
+  assert.deepEqual({ ...verif }, { enc: 0, essai: null });
   assert.equal(lireSymbole(ctx, '_encodeurs.size > 0'), true, '_encodeurs doit être repeuplé par Capacites.tester()');
 });
 

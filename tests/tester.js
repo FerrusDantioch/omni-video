@@ -121,7 +121,7 @@ lancer('Omni-Vidéo', async () => {
       verifier(son && son.codec_name === 'aac', 'son AAC (accepté par YouTube)', son);
       verifier(Math.abs(duree - 3) < 0.15, 'durée : 3 s', duree);
     }
-    await p.click('#fenetre-export button[value="fermer"]');
+    await p.click('#fenetre-export [data-etape="termine"] button[value="fermer"]');
     await p.waitForTimeout(300);
   });
 
@@ -264,7 +264,7 @@ lancer('Omni-Vidéo', async () => {
   });
 
   await section('Vérifier ma tablette, Refaire le test et repli Safari (sans AudioEncoder)', async () => {
-    await aller(p, '[data-action="voir-tablette"]');
+    await aller(p, '.pied [data-action="voir-tablette"]');
     await aller(p, '[data-action="refaire-test"]');
     await p.waitForSelector('#liste-tests > li', { timeout: 10000 });
     const nbTests = await p.$$eval('#liste-tests > li', (l) => l.length);
